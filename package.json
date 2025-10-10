@@ -1,0 +1,21 @@
+{
+  "name": "hoa-js.com",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview"
+  },
+  "author": "nswbmw",
+  "license": "MIT",
+  "homepage": "https://hoa-js.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hoa-js/website.git"
+  },
+  "devDependencies": {
+    "vitepress": "1.6.4"
+  }
+}
