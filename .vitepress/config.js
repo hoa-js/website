@@ -38,7 +38,7 @@ export default defineConfig({
         text: 'Middleware',
         items: [
           { text: 'Basic Authentication', link: '/middleware/basic-auth' },
-          { text: 'Body Parser', link: '/middleware/body-parser' },
+          { text: 'Body Parser', link: '/middleware/bodyparser' },
           { text: 'Cache', link: '/middleware/cache' },
           { text: 'Compress', link: '/middleware/compress' },
           { text: 'Context Storage', link: '/middleware/context-storage' },
