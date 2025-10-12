@@ -53,6 +53,12 @@ export default defineConfig({
           { text: 'Response Time', link: '/middleware/response-time' },
           { text: 'Router', link: '/middleware/router' },
           { text: 'Timeout', link: '/middleware/timeout' },
+          {
+            text: 'Validator',
+            items: [
+              { text: 'Zod', link: '/middleware/validator/zod' }
+            ]
+          }
         ]
       },
       {
