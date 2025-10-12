@@ -42,6 +42,7 @@ export default defineConfig({
           { text: 'Cache', link: '/middleware/cache' },
           { text: 'Compress', link: '/middleware/compress' },
           { text: 'Context Storage', link: '/middleware/context-storage' },
+          { text: 'Cookie', link: '/middleware/cookie' },
           { text: 'CORS', link: '/middleware/cors' },
           { text: 'CSRF', link: '/middleware/csrf' },
           { text: 'Etag', link: '/middleware/etag' },
