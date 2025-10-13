@@ -10,7 +10,7 @@ Format route responses into a consistent JSON envelope for success and error cas
 
 ```js
 import { Hoa } from 'hoa'
-import { json } from 'hoa-json'
+import { json } from '@hoajs/json'
 
 const app = new Hoa()
 app.use(json())
@@ -158,4 +158,38 @@ const optionsRes = await app.fetch(new Request('http://localhost/options', { met
 // HTTP status: 204
 // Headers: { 'Allow': 'GET,HEAD,OPTIONS' }
 // Response body: '' (empty) — JSON body is not constructed for OPTIONS
+```
+
+## Raw mode
+
+Enable raw response mode to bypass JSON formatting when necessary.
+
+- Success path: When `ctx._raw` is truthy, the middleware does nothing — it preserves `ctx.res.status` and `ctx.res.body` as-is.
+- Error path: When `ctx._raw` is truthy and an error is thrown, the middleware rethrows the error. The application's default error handler responds with plain text and merges `err.headers` into the response.
+
+Example (success):
+
+```js
+app.use(json())
+app.use(async (ctx) => {
+  if (ctx.req.pathname === '/raw') {
+    ctx._raw = true
+    ctx.res.status = 200
+    ctx.res.body = { ok: true }
+  }
+})
+// Response: status 200, JSON body { "ok": true }
+```
+
+Example (error):
+
+```js
+app.use(json())
+app.use(async (ctx) => {
+  if (ctx.req.pathname === '/raw-error') {
+    ctx._raw = true
+    ctx.throw(418, { message: "I'm a teapot", headers: { 'x-error-id': 'raw123' } })
+  }
+})
+// Response: status 418, header 'x-error-id: raw123', plain text body "I'm a teapot"
 ```
