@@ -52,7 +52,13 @@ export default defineConfig({
           { text: 'Method Override', link: '/middleware/method-override' },
           { text: 'Request ID', link: '/middleware/request-id' },
           { text: 'Response Time', link: '/middleware/response-time' },
-          { text: 'Router', link: '/middleware/router' },
+          {
+            text: 'Routing',
+            items: [
+              { text: 'Router', link: '/middleware/router/router' },
+              { text: 'Tiny Router', link: '/middleware/router/tiny-router' }
+            ]
+          },
           { text: 'Timeout', link: '/middleware/timeout' },
           {
             text: 'Validator',
