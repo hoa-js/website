@@ -63,7 +63,8 @@ export default defineConfig({
           {
             text: 'Validator',
             items: [
-              { text: 'Zod', link: '/middleware/validator/zod' }
+              { text: 'Zod', link: '/middleware/validator/zod' },
+              { text: 'Valibot', link: '/middleware/validator/valibot' }
             ]
           }
         ]
