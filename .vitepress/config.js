@@ -66,6 +66,12 @@ export default defineConfig({
               { text: 'Zod', link: '/middleware/validator/zod' },
               { text: 'Valibot', link: '/middleware/validator/valibot' }
             ]
+          },
+          {
+            text: 'View Renderer',
+            items: [
+              { text: 'Mustache', link: '/middleware/view/mustache' },
+            ]
           }
         ]
       },
