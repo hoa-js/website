@@ -50,6 +50,12 @@ export default defineConfig({
           { text: 'JWT', link: '/middleware/jwt' },
           { text: 'Logger', link: '/middleware/logger' },
           { text: 'Method Override', link: '/middleware/method-override' },
+          {
+            text: 'Rate Limit',
+            items: [
+              { text: 'Cloudflare', link: '/middleware/ratelimit/cloudflare-rate-limit' },
+            ]
+          },
           { text: 'Request ID', link: '/middleware/request-id' },
           { text: 'Response Time', link: '/middleware/response-time' },
           {
