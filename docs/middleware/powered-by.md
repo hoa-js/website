@@ -11,7 +11,7 @@ import { poweredBy } from '@hoajs/powered-by'
 const app = new Hoa()
 
 // Enable PoweredBy middleware for all routes with defaults
-app.use(poweredBy({serverName: 'hoa'}))
+app.use(poweredBy('hoa'))
 
 app.use(async (ctx) => {
   ctx.res.body = 'Hello, Hoa!'
