@@ -58,6 +58,7 @@ export default defineConfig({
           },
           { text: 'Request ID', link: '/middleware/request-id' },
           { text: 'Response Time', link: '/middleware/response-time' },
+          { text: 'Powered By', link: '/middleware/powered-by' },
           {
             text: 'Routing',
             items: [
