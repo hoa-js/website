@@ -46,6 +46,7 @@ export default defineConfig({
           { text: 'CORS', link: '/middleware/cors' },
           { text: 'CSRF', link: '/middleware/csrf' },
           { text: 'Etag', link: '/middleware/etag' },
+          { text: 'IP Restriction', link: '/middleware/ip' },
           { text: 'JSON Format', link: '/middleware/json' },
           { text: 'JWT', link: '/middleware/jwt' },
           { text: 'Logger', link: '/middleware/logger' },
