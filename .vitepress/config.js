@@ -74,6 +74,7 @@ export default defineConfig({
               { text: 'Valibot', link: '/middleware/validator/valibot' }
             ]
           },
+          { text: 'Vary', link: '/middleware/vary' },
           {
             text: 'View Renderer',
             items: [
