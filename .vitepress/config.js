@@ -45,6 +45,12 @@ export default defineConfig({
           { text: 'Cookie', link: '/middleware/cookie' },
           { text: 'CORS', link: '/middleware/cors' },
           { text: 'CSRF', link: '/middleware/csrf' },
+          {
+            text: 'Debug',
+            items: [
+              { text: 'Sentry', link: '/middleware/debug/sentry' },
+            ]
+          },
           { text: 'Etag', link: '/middleware/etag' },
           { text: 'IP Restriction', link: '/middleware/ip' },
           { text: 'JSON Format', link: '/middleware/json' },
