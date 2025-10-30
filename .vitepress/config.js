@@ -74,6 +74,64 @@ export default defineConfig({
               { text: 'Tiny Router', link: '/middleware/router/tiny-router' }
             ]
           },
+          {
+            text: 'Secure Headers',
+            items: [
+              { text: 'Secure-Headers', link: '/middleware/secure-headers/secure-headers' },
+              {
+                text: "Content-Security-Policy",
+                link: "/middleware/secure-headers/content-security-policy"
+              },
+              {
+                text: "Cross-Origin-Embedder-Policy",
+                link: "/middleware/secure-headers/cross-origin-embedder-policy"
+              },
+              {
+                text: "Cross-Origin-Opener-Policy",
+                link: "/middleware/secure-headers/cross-origin-opener-policy"
+              },
+              {
+                text: "Cross-Origin-Resource-Policy",
+                link: "/middleware/secure-headers/cross-origin-resource-policy"
+              },
+              {
+                text: "Origin-Agent-Cluster",
+                link: "/middleware/secure-headers/origin-agent-cluster"
+              },
+              {
+                text: "Referrer-Policy",
+                link: "/middleware/secure-headers/referrer-policy"
+              },
+              {
+                text: "Strict-Transport-Security",
+                link: "/middleware/secure-headers/strict-transport-security"
+              },
+              {
+                text: "X-Content-Type-Options",
+                link: "/middleware/secure-headers/x-content-type-options"
+              },
+              {
+                text: "X-Dns-Prefetch-Control",
+                link: "/middleware/secure-headers/x-dns-prefetch-control"
+              },
+              {
+                text: "X-Download-Options",
+                link: "/middleware/secure-headers/x-download-options"
+              },
+              {
+                text: "X-Frame-Options",
+                link: "/middleware/secure-headers/x-frame-options"
+              },
+              {
+                text: "X-Xss-Protection",
+                link: "/middleware/secure-headers/x-xss-protection"
+              },
+              {
+                text: "Permission-Policy",
+                link: "/middleware/secure-headers/permission-policy"
+              }
+            ]
+          },
           { text: 'Timeout', link: '/middleware/timeout' },
           {
             text: 'Validator',
