@@ -1,4 +1,4 @@
-## @hoajs/cloudflare-rate-limit
+# @hoajs/cloudflare-rate-limit
 
 This package provides two middlewares to enforce rate limiting in Hoa apps on Cloudflare Workers:
 

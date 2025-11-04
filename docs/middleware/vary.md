@@ -1,4 +1,4 @@
-## @hoajs/vary
+# @hoajs/vary
 
 `@hoajs/vary` adds `ctx.res.vary(field)` to Hoa responses to maintain the HTTP `Vary` header. It tells caches (CDN/browser/proxy) that this response varies based on certain request headers.
 

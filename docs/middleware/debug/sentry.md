@@ -1,4 +1,4 @@
-## @hoajs/sentry
+# @hoajs/sentry
 
 Sentry middleware for Hoa. It integrates Sentry error tracking and monitoring using [toucan-js](https://github.com/robertcepa/toucan-js), designed for Cloudflare Workers and edge runtimes.
 

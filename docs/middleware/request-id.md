@@ -1,4 +1,4 @@
-## @hoajs/request-id
+# @hoajs/request-id
 
 Generate and propagate a traceable Request ID for each request and response to help with log correlation, debugging, and cross-service tracing.
 

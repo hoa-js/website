@@ -1,4 +1,4 @@
-## @hoajs/valibot
+# @hoajs/valibot
 
 Valibot validator middleware for Hoa.
 

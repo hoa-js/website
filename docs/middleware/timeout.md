@@ -1,4 +1,4 @@
-## @hoajs/timeout
+# @hoajs/timeout
 
 Provide request timeout for Hoa. If downstream middleware does not finish within the specified duration, respond with 504 Gateway Timeout.
 

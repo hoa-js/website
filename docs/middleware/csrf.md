@@ -1,4 +1,4 @@
-## @hoajs/csrf
+# @hoajs/csrf
 
 `@hoajs/csrf` is a CSRF (Cross-Site Request Forgery) protection middleware for Hoa. It validates requests based on Origin, Referer, and Sec-Fetch-Site headers to prevent CSRF attacks.
 

@@ -1,4 +1,4 @@
-## Origin-Agent-Cluster
+# Origin-Agent-Cluster
 
 The Origin-Agent-Cluster middleware sets the `Origin-Agent-Cluster` header to request that the browser isolate the page in its own agent cluster, improving security and performance.
 

@@ -1,4 +1,4 @@
-## Cross-Origin-Embedder-Policy
+# Cross-Origin-Embedder-Policy
 
 The Cross-Origin-Embedder-Policy (COEP) middleware sets the `Cross-Origin-Embedder-Policy` header to control how the document can load cross-origin resources.
 

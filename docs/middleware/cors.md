@@ -1,4 +1,4 @@
-## @hoajs/cors
+# @hoajs/cors
 
 `@hoajs/cors` is a CORS (Cross-Origin Resource Sharing) middleware for Hoa. It adds the appropriate CORS response headers for both simple requests and preflight (OPTIONS) requests.
 

@@ -1,4 +1,4 @@
-## @hoajs/etag
+# @hoajs/etag
 
 Generate and validate HTTP ETags for Hoa responses. This middleware computes (or respects existing) entity tags and handles conditional requests using the `If-None-Match` header to reduce bandwidth and improve cache efficiency.
 

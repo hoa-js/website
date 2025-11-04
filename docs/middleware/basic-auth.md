@@ -1,4 +1,4 @@
-## @hoajs/basic-auth
+# @hoajs/basic-auth
 
 HTTP Basic Authentication middleware for Hoa.
 

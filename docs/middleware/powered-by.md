@@ -1,4 +1,4 @@
-## @hoajs/powered-by
+# @hoajs/powered-by
 
 `@hoajs/powered-by` is a middleware for Hoa that adds a `X-Powered-By` header to responses.
 

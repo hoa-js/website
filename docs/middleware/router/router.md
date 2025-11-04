@@ -1,4 +1,4 @@
-## @hoajs/router
+# @hoajs/router
 
 `@hoajs/router` is a router extension for `Hoa`. It augments a `Hoa` instance with HTTP method helpers, path matching powered by [path-to-regexp](https://github.com/pillarjs/path-to-regexp), and automatic extraction of route parameters into `ctx.req.params`.
 

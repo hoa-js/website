@@ -1,4 +1,4 @@
-## @hoajs/ip
+# @hoajs/ip
 
 IP restriction middleware for Hoa. It allows or denies requests based on client IP using static addresses, CIDR notation, regular expressions, or custom functions.
 

@@ -1,4 +1,4 @@
-## @hoajs/json
+# @hoajs/json
 
 Format route responses into a consistent JSON envelope for success and error cases in Hoa.
 

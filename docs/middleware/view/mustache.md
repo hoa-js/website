@@ -1,4 +1,4 @@
-## @hoajs/mustache
+# @hoajs/mustache
 
 A Mustache-based view renderer extension for Hoa. It adds `ctx.render(template, view, partials?)` so you can generate HTML strings in middleware and send them as the response body.
 

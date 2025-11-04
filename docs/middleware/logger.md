@@ -1,4 +1,4 @@
-## @hoajs/logger
+# @hoajs/logger
 
 Logger middleware for Hoa. It logs the incoming request and the outgoing response with method, path, status, and elapsed time.
 

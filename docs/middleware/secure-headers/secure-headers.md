@@ -1,4 +1,4 @@
-## @hoajs/secure-headers
+# @hoajs/secure-headers
 
 `@hoajs/secure-headers` is a comprehensive security headers middleware for Hoa. It sets various HTTP security headers to help protect your application from common web vulnerabilities.
 

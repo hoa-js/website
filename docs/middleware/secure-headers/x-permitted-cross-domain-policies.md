@@ -1,4 +1,4 @@
-## X-Permitted-Cross-Domain-Policies
+# X-Permitted-Cross-Domain-Policies
 
 The X-Permitted-Cross-Domain-Policies middleware sets the `X-Permitted-Cross-Domain-Policies` header to control how Adobe Flash and PDF documents can access data across domains.
 

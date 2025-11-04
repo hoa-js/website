@@ -1,4 +1,4 @@
-## Referrer-Policy
+# Referrer-Policy
 
 The Referrer-Policy middleware sets the `Referrer-Policy` header to control how much referrer information should be included with requests.
 

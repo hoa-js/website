@@ -1,4 +1,4 @@
-## Permission-Policy
+# Permission-Policy
 
 The Permission-Policy middleware sets the `Permissions-Policy` header to control which browser features and APIs can be used in the browser.
 

@@ -1,4 +1,4 @@
-## X-Frame-Options
+# X-Frame-Options
 
 The X-Frame-Options middleware sets the `X-Frame-Options` header to protect against clickjacking attacks by controlling whether the page can be embedded in frames.
 

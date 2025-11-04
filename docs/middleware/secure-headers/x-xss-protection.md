@@ -1,4 +1,4 @@
-## X-XSS-Protection
+# X-XSS-Protection
 
 The X-XSS-Protection middleware sets the `X-XSS-Protection` header to control the browser's XSS filter. Modern best practice is to disable it.
 

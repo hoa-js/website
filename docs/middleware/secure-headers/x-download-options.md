@@ -1,4 +1,4 @@
-## X-Download-Options
+# X-Download-Options
 
 The X-Download-Options middleware sets the `X-Download-Options` header to prevent Internet Explorer from executing downloads in the site's context.
 

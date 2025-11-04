@@ -1,4 +1,4 @@
-## app
+# app
 
 ```js
 const app = new Hoa({

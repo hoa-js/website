@@ -1,4 +1,4 @@
-## @hoajs/zod
+# @hoajs/zod
 
 Zod validator middleware for Hoa.
 

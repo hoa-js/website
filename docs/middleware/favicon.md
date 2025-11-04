@@ -1,4 +1,4 @@
-## @hoajs/favicon
+# @hoajs/favicon
 
 Favicon middleware for Hoa. Serves a favicon.ico file from base64 data or returns an empty response.
 

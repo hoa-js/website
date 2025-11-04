@@ -1,4 +1,4 @@
-## @hoajs/adapter
+# @hoajs/adapter
 
 This package provides an adapter that lets a Hoa application run seamlessly on a Node.js HTTP server. Under the hood it uses `createServerAdapter` from `@whatwg-node/server` to bridge WHATWG Fetch–style Request/Response with Node's `http.Server`.
 

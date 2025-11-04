@@ -1,4 +1,4 @@
-## X-DNS-Prefetch-Control
+# X-DNS-Prefetch-Control
 
 The X-DNS-Prefetch-Control middleware sets the `X-DNS-Prefetch-Control` header to control DNS prefetching, which can improve performance but may have privacy implications.
 

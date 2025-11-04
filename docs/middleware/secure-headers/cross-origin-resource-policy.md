@@ -1,4 +1,4 @@
-## Cross-Origin-Resource-Policy
+# Cross-Origin-Resource-Policy
 
 The Cross-Origin-Resource-Policy (CORP) middleware sets the `Cross-Origin-Resource-Policy` header to control which origins can load the resource.
 

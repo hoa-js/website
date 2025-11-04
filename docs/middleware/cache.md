@@ -1,4 +1,4 @@
-## @hoajs/cache
+# @hoajs/cache
 
 Provides simple and reliable response caching for Hoa. Built on the Web-standard `caches` API and works in Cloudflare Workers, Deno, Bun, Node.js, and other runtimes that support it.
 

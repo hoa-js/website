@@ -1,4 +1,4 @@
-## @hoajs/tiny-router
+# @hoajs/tiny-router
 
 `@hoajs/tiny-router` is a lightweight router extension for `Hoa`. It does not rely on `path-to-regexp`; instead, it uses a minimal in-house compiler to perform path matching and parameter parsing. It augments a `Hoa` instance with HTTP method helpers and automatically decodes route parameters into `ctx.req.params`.
 

@@ -1,4 +1,4 @@
-## @hoajs/cookie
+# @hoajs/cookie
 
 Provides cookie read/write capabilities on request/response. Supports plain and signed cookies, prefix constraints (__Secure- / __Host-), and modern attributes like Partitioned.
 

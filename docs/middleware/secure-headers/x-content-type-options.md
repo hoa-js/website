@@ -1,4 +1,4 @@
-## X-Content-Type-Options
+# X-Content-Type-Options
 
 The X-Content-Type-Options middleware sets the `X-Content-Type-Options` header to prevent browsers from MIME-sniffing responses away from the declared content-type.
 

@@ -1,4 +1,4 @@
-## @hoajs/method-override
+# @hoajs/method-override
 
 Middleware to override the HTTP method. Useful when clients are limited to sending `POST` or `GET`, but you need to perform actions like `DELETE`, `PUT`, or `PATCH` by declaring the target method in a conventional field.
 

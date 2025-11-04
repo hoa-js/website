@@ -1,4 +1,4 @@
-## Cross-Origin-Opener-Policy
+# Cross-Origin-Opener-Policy
 
 The Cross-Origin-Opener-Policy (COOP) middleware sets the `Cross-Origin-Opener-Policy` header to control how the document can be opened by cross-origin documents.
 

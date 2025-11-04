@@ -1,4 +1,4 @@
-## Strict-Transport-Security
+# Strict-Transport-Security
 
 The Strict-Transport-Security (HSTS) middleware sets the `Strict-Transport-Security` header to tell browsers to only access the site over HTTPS.
 

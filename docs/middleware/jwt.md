@@ -1,4 +1,4 @@
-## @hoajs/jwt
+# @hoajs/jwt
 
 JSON Web Token (JWT) middleware for Hoa.
 

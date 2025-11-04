@@ -1,4 +1,4 @@
-## @hoajs/compress
+# @hoajs/compress
 
 Provide response compression (gzip/deflate) for Hoa, brotli (br) is not supported now.
 

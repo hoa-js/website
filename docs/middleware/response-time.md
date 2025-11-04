@@ -1,4 +1,4 @@
-## @hoajs/response-time
+# @hoajs/response-time
 
 Response time middleware for Hoa. It measures the elapsed time using `performance.now()` across your downstream middleware and handlers, and writes the duration to a response header (default `X-Response-Time`).
 

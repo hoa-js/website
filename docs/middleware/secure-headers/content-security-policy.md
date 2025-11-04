@@ -1,4 +1,4 @@
-## Content-Security-Policy
+# Content-Security-Policy
 
 The Content-Security-Policy (CSP) middleware helps prevent cross-site scripting (XSS) attacks and other code injection attacks by specifying which sources of content are allowed to be loaded.
 

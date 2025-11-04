@@ -1,4 +1,4 @@
-## @hoajs/bodyparser
+# @hoajs/bodyparser
 
 Body parser middleware for Hoa that parses request bodies based on Content-Type and assigns the parsed result to `ctx.req.body`.
 
