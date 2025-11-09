@@ -44,7 +44,7 @@ app.use(async (ctx, next) => {
 
 - fail: `Record<string, ((ctx: HoaContext, error: Error) => any | Promise<any>) | any>`
   - Keys and resolvers used to compose the error JSON body; values may be literals or async functions.
-  - Default: `{ code: error.status || error.statusCode || 500, message: error.message || null }`.
+  - Default: `{ code: error.status || error.statusCode || 500, message: e.expose ? e.message : statusTextMapping[e.status || e.statusCode || 500] }`.
 
 ## Examples
 
