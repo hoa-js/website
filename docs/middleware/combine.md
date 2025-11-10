@@ -1,33 +1,41 @@
 # @hoajs/combine
 
-提供组合中间件的工具函数，包括 `some`、`every` 和 `except` 方法，用于更灵活地组合和控制中间件的执行流程。
+Utility functions for composing middlewares, including `some`, `every`, and `except`, enabling more flexible composition and control over middleware execution.
 
-## 快速开始
+## Quick Start
 
 ```js
 import { Hoa } from 'hoa'
-import { some, every, except } from '@hoajs/combine'
+import { every, some } from '@hoajs/combine'
+import { RateLimiter } from '@hoajs/rate-limiter'
+import { basicAuth } from '@hoajs/basic-auth'
+import { ip } from '@hoajs/ip'
 
 const app = new Hoa()
 
-// 使用 some 方法，任一中间件通过即继续
-app.use(some(
-  (ctx) => ctx.req.method === 'GET',
-  (ctx) => ctx.req.method === 'POST'
-))
+app.use(
+  some(
+    every(
+      ip({ allowList: ['192.168.0.2'] }),
+      basicAuth({ username: 'admin', password: '123456' })
+    ),
+    // If both conditions are met, RateLimiter will not execute.
+    RateLimiter(...)
+  )
+)
 
 export default app
 ```
 
-## 方法
+## Methods
 
 ### some(...middlewares)
 
-创建一个组合中间件，运行第一个返回 true 的中间件。
+Create a combined middleware that runs the first middleware which returns `true`.
 
-- 按顺序执行中间件，如果中间件返回 true 或没有返回值，则停止执行后续中间件
-- 如果中间件返回 false，则继续执行下一个中间件
-- 如果所有中间件都返回 false 或抛出错误，则抛出最后一个错误
+- Executes middlewares in order; if a middleware returns `true` or returns nothing, stop executing the subsequent ones
+- If a middleware returns `false`, continue to the next middleware
+- If all middlewares return `false` or throw, the last error is thrown
 
 ```js
 app.use(some(
@@ -43,18 +51,18 @@ app.use(some(
 
 ### every(...middlewares)
 
-创建一个组合中间件，运行所有中间件，如果任何中间件返回 false 或抛出错误，则停止执行。
+Create a combined middleware that runs all middlewares. If any middleware returns `false` or throws, stop execution.
 
-- 按顺序执行所有中间件
-- 如果任何中间件返回 false 或抛出错误，则停止执行并抛出错误
-- 所有中间件都通过才会继续执行后续中间件
+- Executes all middlewares in order
+- If any middleware returns `false` or throws, stop and rethrow the error
+- Only when all middlewares pass will the downstream middleware continue
 
 ```js
 app.use(every(
   (ctx) => ctx.req.method === 'GET',
   (ctx) => ctx.req.headers['x-auth-token'] === 'secret',
   (ctx) => {
-    // 只有前两个条件都通过才会执行到这里
+    // Only reached when both prior conditions pass
     ctx.state.user = { id: 1, name: 'admin' }
   }
 ))
@@ -62,15 +70,15 @@ app.use(every(
 
 ### except(condition, ...middlewares)
 
-创建一个组合中间件，当条件不满足时执行指定的中间件。
+Create a combined middleware that executes the specified middlewares when the condition is not satisfied.
 
-- `condition`: 可以是一个条件函数或条件函数数组
-- `middlewares`: 当条件不满足时要执行的中间件
-- 如果条件函数返回 true，则跳过中间件执行
-- 如果条件函数返回 false，则执行中间件
+- `condition`: a single condition function or an array of condition functions
+- `middlewares`: middlewares to execute when the condition is not met
+- If the condition function returns `true`, skip executing the middlewares
+- If the condition function returns `false`, execute the middlewares
 
 ```js
-// 当请求方法不是 GET 时执行中间件
+// Execute middlewares when the request method is not GET
 app.use(except(
   (ctx) => ctx.req.method === 'GET',
   (ctx, next) => {
@@ -79,7 +87,7 @@ app.use(except(
   }
 ))
 
-// 使用多个条件
+// Use multiple conditions
 app.use(except(
   [
     (ctx) => ctx.req.method === 'GET',
@@ -92,18 +100,11 @@ app.use(except(
 ))
 ```
 
-## 类型定义
+## Type Definitions
 
-| 类型/函数 | 说明 | 参数 | 返回值 |
-|----------|------|------|--------|
-| `Condition` | 条件函数类型 | `ctx: HoaContext` | `boolean` |
-| `some` | 任一中间件通过即继续 | `...middlewares: (HoaMiddleware \| Condition)[]` | `HoaMiddleware` |
-| `every` | 所有中间件都通过才继续 | `...middlewares: (HoaMiddleware \| Condition)[]` | `HoaMiddleware` |
-| `except` | 条件不满足时执行中间件 | `condition: Condition \| Condition[], ...middlewares: HoaMiddleware[]` | `HoaMiddleware` |
-
-## 使用场景
-
-1. **条件路由**：根据请求参数、头信息等条件执行不同的中间件
-2. **权限控制**：组合多个权限检查条件
-3. **请求验证**：验证请求参数、头信息等
-4. **API 版本控制**：根据请求头或路径执行不同版本的中间件
+| Type/Function | Description | Parameters | Returns |
+|---------------|-------------|------------|---------|
+| `Condition` | Condition function type | `ctx: HoaContext` | `boolean` |
+| `some` | Continue when any middleware passes | `...middlewares: (HoaMiddleware \| Condition)[]` | `HoaMiddleware` |
+| `every` | Continue only when all middlewares pass | `...middlewares: (HoaMiddleware \| Condition)[]` | `HoaMiddleware` |
+| `except` | Execute middlewares when condition fails | `condition: Condition \| Condition[], ...middlewares: HoaMiddleware[]` | `HoaMiddleware` |
