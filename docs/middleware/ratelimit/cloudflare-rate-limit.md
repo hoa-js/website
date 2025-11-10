@@ -11,8 +11,6 @@ KV-based rate limiting stores counters in KV. It also sets common rate limit hea
 
 ### Quick Start
 
-Using a binding name (string):
-
 ```js
 import { Hoa } from 'hoa'
 import { KVRateLimiter } from '@hoajs/cloudflare-rate-limit'
@@ -20,7 +18,6 @@ import { KVRateLimiter } from '@hoajs/cloudflare-rate-limit'
 const app = new Hoa()
 
 app.use(KVRateLimiter({
-  // resolves to ctx.env["KV"]
   binding: 'KV',
   prefix: 'ratelimit:',
   limit: 3,
@@ -36,22 +33,11 @@ app.use(async (ctx) => {
 export default app
 ```
 
-Or provide a function:
-
-```js
-app.use(KVRateLimiter({
-  binding: (ctx) => ctx.env.KV,
-  limit: 5,
-  period: 60,
-  keyGenerator: (ctx) => ctx.req.ip
-}))
-```
-
 ### Options
 
 | Option          | Type                 | Default        | Description                                                                                   | Required |
 |-----------------|----------------------|----------------|-----------------------------------------------------------------------------------------------|----------|
-| `binding`       | string or function   | -              | String resolves to `ctx.env[binding]`; Function: `(ctx) => KVNamespace`.                      | Yes      |
+| `binding`       | string               | -              | KV namespace binding name (resolves to `ctx.env[binding]`).                                   | Yes      |
 | `prefix`        | string               | `"ratelimit:"` | KV key prefix.                                                                                | No       |
 | `limit`         | number (>= 1)        | -              | Max requests per `period`.                                                                    | Yes      |
 | `period`        | number (>= 60)       | -              | Window length in seconds (Cloudflare KV TTL minimum).                                         | Yes      |
@@ -85,8 +71,6 @@ This middleware calls Cloudflare's native Rate Limiting API binding and does not
 
 ### Quick Start
 
-Using a binding name (string):
-
 ```js
 import { Hoa } from 'hoa'
 import { RateLimiter } from '@hoajs/cloudflare-rate-limit'
@@ -94,7 +78,6 @@ import { RateLimiter } from '@hoajs/cloudflare-rate-limit'
 const app = new Hoa()
 
 app.use(RateLimiter({
-  // resolves to ctx.env["RATE_LIMITER"]
   binding: 'RATE_LIMITER',
   keyGenerator: (ctx) => ctx.req.ip
 }))
@@ -106,20 +89,11 @@ app.use(async (ctx) => {
 export default app
 ```
 
-Or provide a function:
-
-```js
-app.use(RateLimiter({
-  binding: (ctx) => ctx.env.RATE_LIMITER,
-  keyGenerator: (ctx) => ctx.req.ip
-}))
-```
-
 ### Options
 
 | Option           | Type               | Default    | Description                                                                                 | Required |
 |------------------|--------------------|------------|---------------------------------------------------------------------------------------------|----------|
-| `binding`        | string or function | -          | String resolves to `ctx.env[binding]`; Function: `(ctx) => RateLimiterBinding` with `limit({ key })`. | Yes      |
+| `binding`        | string             | -          | Rate Limiter binding name (resolves to `ctx.env[binding]`).                                   | Yes      |
 | `keyGenerator`   | function           | -          | `(ctx) => string \| null \| undefined \| false`. Falsy key skips rate limiting.             | Yes      |
 | `successHandler` | function           | no-op      | `(ctx) => void`. Runs after `next()`; default no-op.                                        | No       |
 | `errorHandler`   | function           | throws 429 | `(ctx) => void`. Runs when limited; default throws `429`.                                   | No       |
