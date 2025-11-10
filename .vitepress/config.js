@@ -40,12 +40,12 @@ export default defineConfig({
           { text: 'Basic Authentication', link: '/middleware/basic-auth' },
           { text: 'Body Parser', link: '/middleware/bodyparser' },
           { text: 'Cache', link: '/middleware/cache' },
+          { text: 'Combine', link: '/middleware/combine' },
           { text: 'Compress', link: '/middleware/compress' },
           { text: 'Context Storage', link: '/middleware/context-storage' },
           { text: 'Cookie', link: '/middleware/cookie' },
           { text: 'CORS', link: '/middleware/cors' },
           { text: 'CSRF', link: '/middleware/csrf' },
-          { text: 'Combine', link: '/middleware/combine' },
           {
             text: 'Debug',
             items: [
@@ -154,6 +154,7 @@ export default defineConfig({
         text: 'Example',
         items: [
           { text: 'Temp Note', link: 'https://github.com/hoa-js/examples/tree/master/tempnote' },
+          { text: '2FA', link: 'https://github.com/hoa-js/examples/tree/master/2fa' },
         ]
       },
     ],
