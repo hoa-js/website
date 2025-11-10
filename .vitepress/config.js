@@ -45,6 +45,7 @@ export default defineConfig({
           { text: 'Cookie', link: '/middleware/cookie' },
           { text: 'CORS', link: '/middleware/cors' },
           { text: 'CSRF', link: '/middleware/csrf' },
+          { text: 'Combine', link: '/middleware/combine' },
           {
             text: 'Debug',
             items: [
