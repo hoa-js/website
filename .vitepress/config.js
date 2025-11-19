@@ -57,8 +57,8 @@ export default defineConfig({
           { text: 'IP Restriction', link: '/middleware/ip' },
           { text: 'JSON Format', link: '/middleware/json' },
           { text: 'JWT', link: '/middleware/jwt' },
-          { text: 'Logger', link: '/middleware/logger' },
           { text: 'Language', link: '/middleware/language' },
+          { text: 'Logger', link: '/middleware/logger' },
           { text: 'Method Override', link: '/middleware/method-override' },
           {
             text: 'Rate Limit',
@@ -154,6 +154,7 @@ export default defineConfig({
       {
         text: 'Example',
         items: [
+          { text: 'My IP', link: 'https://github.com/hoa-js/examples/tree/master/myip' },
           { text: 'Temp Note', link: 'https://github.com/hoa-js/examples/tree/master/tempnote' },
           { text: '2FA', link: 'https://github.com/hoa-js/examples/tree/master/2fa' },
         ]
