@@ -58,6 +58,7 @@ export default defineConfig({
           { text: 'JSON Format', link: '/middleware/json' },
           { text: 'JWT', link: '/middleware/jwt' },
           { text: 'Logger', link: '/middleware/logger' },
+          { text: 'Language', link: '/middleware/language' },
           { text: 'Method Override', link: '/middleware/method-override' },
           {
             text: 'Rate Limit',
