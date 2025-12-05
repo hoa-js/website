@@ -1,1 +1,0 @@
-import{_ as i,c as a,o as n,ae as h}from"./chunks/framework.BQlYxExx.js";const g=JSON.parse('{"title":"app","description":"","frontmatter":{},"headers":[],"relativePath":"api/hoa.md","filePath":"api/hoa.md"}'),p={name:"api/hoa.md"};function t(l,s,k,e,E,r){return n(),a("div",null,[...s[0]||(s[0]=[h("",17)])])}const y=i(p,[["render",t]]);export{g as __pageData,y as default};

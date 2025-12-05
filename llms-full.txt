@@ -1,0 +1,6816 @@
+---
+url: /adapter/node.md
+---
+# @hoajs/adapter
+
+This package provides an adapter that lets a Hoa application run seamlessly on a Node.js HTTP server. Under the hood it uses `createServerAdapter` from `@whatwg-node/server` to bridge WHATWG Fetch–style Request/Response with Node's `http.Server`.
+
+## Quick Start
+
+```ts
+import { Hoa } from 'hoa'
+import { nodeServer } from '@hoajs/adapter'
+
+const app = new Hoa()
+app.extend(nodeServer())
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+app.listen(3000, () => {
+  console.log('Listening on 3000')
+})
+```
+
+## app.listen
+
+Hoa's `app.listen` delegates to Node's `server.listen(...)` and supports the same call signatures. See the official Node.js docs: [server.listen()](https://nodejs.org/docs/latest/api/net.html#serverlisten)
+
+```js
+app.listen(handle[, backlog][, callback])
+app.listen(options[, callback])
+app.listen(path[, backlog][, callback])
+app.listen([port[, host[, backlog]]][, callback])
+```
+
+## Node.js interoperability
+
+Hoa works with web-standard body types (e.g. `string`, `Blob`, `ArrayBuffer`, `TypedArray`, `ReadableStream`). When returning Node.js primitives, you may need to convert them into their web equivalents:
+
+* Buffer → ArrayBuffer (Optional)
+* Node.js Readable stream → Web `ReadableStream`
+
+Example: Buffer to ArrayBuffer
+
+```js
+app.use(async (ctx) => {
+  const buf = Buffer.from('Hello, Hoa!')
+  // Convert Buffer to ArrayBuffer
+  const arrayBuffer = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
+  ctx.res.body = arrayBuffer
+  // ctx.res.body = buf // buf is a Uint8Array instance and also works directly
+})
+```
+
+Example: Node.js stream to Web ReadableStream
+
+```js
+import { Readable } from 'node:stream'
+
+app.use(async (ctx) => {
+  const nodeStream = Readable.from(['Hello, ', 'Hoa!'])
+  // Convert Node.js Readable stream to Web ReadableStream
+  const webStream = Readable.toWeb(nodeStream)
+  ctx.res.body = webStream
+})
+```
+
+---
+
+---
+url: /middleware/basic-auth.md
+---
+# @hoajs/basic-auth
+
+HTTP Basic Authentication middleware for Hoa.
+
+Supported scenarios:
+
+* Single user authentication with username/password
+* Multiple users authentication with user list
+* Custom verification function for flexible authentication logic
+* Secure password comparison with timing-safe algorithms
+* Custom hash function for password security
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { basicAuth } from '@hoajs/basic-auth'
+
+const app = new Hoa()
+app.use(basicAuth({ username: 'admin', password: 'secret' }))
+app.use(async (ctx) => { ctx.res.body = 'Hello, authenticated user!' })
+
+export default app
+```
+
+## Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| **username** | `string` | - | Username for authentication (when using single user mode) |
+| **password** | `string` | - | Password for authentication (when using single user mode) |
+| **verifyUser** | `(ctx: HoaContext, username: string, password: string) => boolean \| Promise<boolean>` | - | Custom function to verify user credentials |
+| **realm** | `string` | `ctx.app.name` | The realm attribute for the WWW-Authenticate header |
+| **hashFunction** | `(data: string \| object \| boolean) => string \| Promise<string>` | SHA-256 | Custom hash function for secure comparison |
+| **invalidUserMessage** | `string \| ((ctx: HoaContext) => string \| Promise<string>)` | `'Unauthorized'` | Custom message or function that returns a message for unauthorized access |
+
+## Examples
+
+### Single user authentication
+
+```js
+app.use(basicAuth({
+  username: 'admin', 
+  password: 'secret123',
+  realm: 'Admin Area' 
+}))
+```
+
+### Multiple users authentication
+
+```js
+app.use(basicAuth( 
+  { username: 'admin', password: 'admin123' }, 
+  { username: 'user1', password: 'pass1' }, 
+  { username: 'user2', password: 'pass2' } 
+))
+```
+
+### Custom verification function
+
+```js
+app.use(basicAuth({
+  verifyUser: async (ctx, username, password) => {
+    // Custom authentication logic
+    const user = await getUserFromDatabase(username)
+    return user && await bcrypt.compare(password, user.hashedPassword)
+  },
+  realm: 'myApp'
+}))
+```
+
+### Custom hash function
+
+```js
+app.use(basicAuth({
+  username: 'admin',
+  password: 'secret',
+  hashFunction: async (data) => {
+    // Custom hash implementation
+    return await customHashFunction(data)
+  }
+}))
+```
+
+### Custom error message
+
+```js
+app.use(basicAuth({
+  username: 'admin',
+  password: 'secret',
+  invalidUserMessage: 'Access denied - please check your credentials'
+}))
+
+// Or with dynamic message
+app.use(basicAuth({
+  username: 'admin',
+  password: 'secret',
+  invalidUserMessage: (ctx) => `Access denied for ${ctx.req.ip}`
+}))
+```
+
+## Security Notes
+
+The middleware implements several security best practices:
+
+* **Timing-safe comparison**: Uses cryptographic hash functions to prevent timing attacks
+* **Secure password handling**: Passwords are hashed using SHA-256 by default
+* **RFC 7617 compliance**: Follows HTTP Basic Authentication specification
+* **Safe base64 decoding**: Handles invalid base64 input gracefully
+* **Realm escaping**: Properly escapes realm values in WWW-Authenticate header
+
+## Error Handling
+
+When authentication fails, the middleware:
+
+1. Returns HTTP 401 Unauthorized status
+2. Sets WWW-Authenticate header with the specified realm
+
+---
+
+---
+url: /middleware/bodyparser.md
+---
+# @hoajs/bodyparser
+
+Body parser middleware for Hoa that parses request bodies based on Content-Type and assigns the parsed result to `ctx.req.body`.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { bodyParser } from '@hoajs/bodyparser'
+
+const app = new Hoa()
+app.use(bodyParser())
+
+app.use(async (ctx) => {
+  ctx.res.body = ctx.req.body
+})
+
+await app.listen(3000)
+```
+
+## Options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `enableTypes` | `('json' \| 'form' \| 'text')[]` | `['json','form']` | Enabled parse targets. When a type is not enabled, bodies of that type are not parsed. |
+| `parsedMethods` | `string[]` | `['POST','PUT','PATCH']` | HTTP methods whose bodies will be parsed (case-insensitive). Requests with other methods are skipped. |
+| `formLimit` | `number \| string` | `'56kb'` | Size limit for `application/x-www-form-urlencoded`. Accepts numbers (bytes) or strings like `'56kb'`, `'1mb'`. |
+| `jsonLimit` | `number \| string` | `'1mb'` | Size limit for JSON bodies. Same format as `formLimit`. |
+| `textLimit` | `number \| string` | `'1mb'` | Size limit for `text/plain` bodies. Same format as `formLimit`. |
+| `extendTypes` | `{ json?: string[]; form?: string[]; text?: string[] }` | `{}` | Extra MIME types merged into built-ins for type matching. Values are normalized to lowercase and deduplicated. |
+| `useClone` | `boolean` | `true` | Read body via `Request.clone().blob()` when `true` (does not consume original stream); use `ctx.req.blob()` when `false` (consumes original stream). |
+| `onError` | `(err: Error, ctx: HoaContext) => void` | `undefined` | Custom error handler. If provided, errors are not thrown; you are responsible for setting response status and body. |
+
+### Limit format
+
+* Supports number (bytes), or string units: `b` / `kb` / `mb` / `gb` (case-insensitive, decimals allowed)
+  * Examples: `1024`, `'56kb'`, `'1mb'`, `'2.5mb'`, `'1gb'`
+* Invalid format will throw (or be handled by `onError`).
+
+## Examples
+
+### Parse JSON
+
+```js
+app.use(bodyParser())
+app.use(async (ctx) => {
+  // Request: Content-Type: application/json, body: {"foo":1}
+  ctx.res.body = ctx.req.body // => { foo: 1 }
+})
+```
+
+### Parse form (x-www-form-urlencoded)
+
+```js
+app.use(bodyParser())
+app.use(async (ctx) => {
+  // Request: Content-Type: application/x-www-form-urlencoded, body: a=1&a=2&b=3
+  ctx.res.body = ctx.req.body // => { a: ['1', '2'], b: '3' }
+})
+```
+
+### Parse only specific methods
+
+```js
+app.use(bodyParser({ parsedMethods: ['POST'] }))
+```
+
+### Parse plain text
+
+```js
+app.use(bodyParser({ enableTypes: ['text'] }))
+app.use(async (ctx) => {
+  // Request: Content-Type: text/plain, body: "hello"
+  ctx.res.body = ctx.req.body // => "hello"
+})
+```
+
+### Extend MIME types
+
+```js
+app.use(bodyParser({
+  extendTypes: { json: ['application/hal+json'] }
+}))
+```
+
+### Control size limits
+
+```js
+app.use(bodyParser({
+  jsonLimit: '2mb',
+  formLimit: 100 * 1024, // 100KB
+  textLimit: '100kb'
+}))
+```
+
+---
+
+---
+url: /middleware/cache.md
+---
+# @hoajs/cache
+
+Provides simple and reliable response caching for Hoa. Built on the Web-standard `caches` API and works in Cloudflare Workers, Deno, Bun, Node.js, and other runtimes that support it.
+
+If the runtime doesn't support `globalThis.caches`, the middleware becomes a no-op and won't affect request handling.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { cache } from '@hoajs/cache'
+
+const app = new Hoa()
+app.use(cache())
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+## Options
+
+```ts
+interface CacheOptions {
+  cacheName?: string | ((ctx: HoaContext) => Promise<string> | string)
+  wait?: boolean
+  cacheControl?: string
+  vary?: string | string[]
+  keyGenerator?: (ctx: HoaContext) => Promise<string> | string
+  cacheableStatusCodes?: number[]
+}
+```
+
+* `cacheName` (default `'cache'`)
+  * Cache store name; supports string, function, or async function.
+  * Useful for maintaining separate caches per route or context.
+
+* `wait` (default `false`)
+  * Whether to wait for `cache.put` to resolve before continuing.
+  * In Deno or environments with an execution context, prefer `true` or provide `ctx.executionCtx` and use `waitUntil`.
+
+* `cacheControl`
+  * Directive string for the `Cache-Control` header; merged and de-duplicated when the response already has this header.
+
+* `vary`
+  * Sets the `Vary` header; merges with existing values, de-duplicates case-insensitively, and normalizes to lowercase.
+  * If `*` is present, an error is thrown (forbids wildcard that prevents effective caching).
+
+* `keyGenerator`
+  * Generates a cache key for each request; defaults to the request URL (`ctx.req.href`).
+  * May use route params, query params, or context; supports async.
+
+* `cacheableStatusCodes` (default `[200]`)
+  * Array of status codes that can be cached.
+
+## Examples
+
+### Basic caching (200 cached by default)
+
+```js
+app.use(cache())
+```
+
+### Set Cache-Control and Vary
+
+```js
+app.use(cache({
+  cacheControl: 'public, max-age=60',
+  vary: ['Accept', 'Accept-Language']
+}))
+
+app.use(async (ctx) => {
+  // If your handler sets headers, the middleware will merge and de-duplicate
+  ctx.res.set('Cache-Control', 'no-cache')
+  ctx.res.set('Vary', 'Accept-Encoding')
+  ctx.res.body = 'data'
+})
+```
+
+Result:
+
+* `Cache-Control`: `no-cache, public, max-age=60` (deduplicated by directive name and appends missing values).
+* `Vary`: `accept, accept-encoding, accept-language` (case-insensitive dedupe, normalized to lowercase).
+
+### Dynamic/async cacheName (per route/tenant isolation)
+
+```js
+app.use(cache({
+  cacheName: async (ctx) => `tenant:${ctx.req.headers.get('x-tenant') ?? 'default'}`
+}))
+```
+
+### Custom cache key (based on params/language)
+
+```js
+app.use(cache({
+  keyGenerator: (ctx) => {
+    const lang = ctx.req.headers.get('accept-language')?.split(',')[0] ?? 'en'
+    return `${ctx.req.href}|lang:${lang}`
+  }
+}))
+```
+
+### Control write timing (wait / executionCtx)
+
+```js
+app.use(cache({ wait: true })) // explicitly wait for the write to finish
+
+// If your runtime provides an execution context (e.g. Cloudflare Workers),
+// ensure it's available on ctx.executionCtx.
+// ctx.executionCtx?.waitUntil(...) schedules the write in the background.
+```
+
+### Cache only specific status codes
+
+```js
+app.use(cache({ cacheableStatusCodes: [200, 204] }))
+```
+
+---
+
+---
+url: /middleware/ratelimit/cloudflare-rate-limit.md
+---
+# @hoajs/cloudflare-rate-limit
+
+This package provides two middlewares to enforce rate limiting in Hoa apps on Cloudflare Workers:
+
+* `KVRateLimiter`: uses Cloudflare KV as the backing store.
+* `RateLimiter`: uses Cloudflare's native Rate Limiting API (no KV).
+
+## KVRateLimiter (Cloudflare KV)
+
+KV-based rate limiting stores counters in KV. It also sets common rate limit headers on responses.
+
+### Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { KVRateLimiter } from '@hoajs/cloudflare-rate-limit'
+
+const app = new Hoa()
+
+app.use(KVRateLimiter({
+  binding: 'KV',
+  prefix: 'ratelimit:',
+  limit: 3,
+  period: 60,
+  interval: 10,
+  keyGenerator: (ctx) => ctx.req.ip
+}))
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+### Options
+
+| Option          | Type                 | Default        | Description                                                                                   | Required |
+|-----------------|----------------------|----------------|-----------------------------------------------------------------------------------------------|----------|
+| `binding`       | string               | -              | KV namespace binding name (resolves to `ctx.env[binding]`).                                   | Yes      |
+| `prefix`        | string               | `"ratelimit:"` | KV key prefix.                                                                                | No       |
+| `limit`         | number (>= 1)        | -              | Max requests per `period`.                                                                    | Yes      |
+| `period`        | number (>= 60)       | -              | Window length in seconds (Cloudflare KV TTL minimum).                                         | Yes      |
+| `interval`      | number (>= 0)        | `0`            | Optional sub-interval used for rounding the reset header; must be `<= period`.                | No       |
+| `keyGenerator`  | function             | -              | `(ctx) => string \| null \| undefined \| false`. Falsy key skips rate limiting.               | Yes      |
+| `successHandler`| function             | built-in       | `(ctx, limit, remaining, reset) => void`. Default sets `X-RateLimit-*` headers.               | No       |
+| `errorHandler`  | function             | built-in       | `(ctx, limit, remaining, reset) => void`. Default throws `429` and sets headers + `Retry-After`.| No       |
+
+### Response Headers
+
+On success (after `next()`), the default success handler sets:
+
+* `X-RateLimit-Limit`: the `limit` value.
+* `X-RateLimit-Remaining`: remaining tokens for the current window.
+* `X-RateLimit-Reset`: current epoch seconds plus `reset`, rounded with `interval`.
+
+On error (rate limit exceeded), the default error handler throws `429` and sets:
+
+* `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` (same semantics as above).
+* `Retry-After`: seconds until reset.
+
+### Notes
+
+* Passing non-numeric values (e.g. `'60s'`) is rejected. Values are coerced with `Number(...)` and validated.
+* `period >= 60` is required due to Cloudflare KV TTL limits.
+* `interval <= period` is enforced.
+
+## RateLimiter (Cloudflare Native API)
+
+This middleware calls Cloudflare's native Rate Limiting API binding and does not store anything in KV.
+
+### Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { RateLimiter } from '@hoajs/cloudflare-rate-limit'
+
+const app = new Hoa()
+
+app.use(RateLimiter({
+  binding: 'RATE_LIMITER',
+  keyGenerator: (ctx) => ctx.req.ip
+}))
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+### Options
+
+| Option           | Type               | Default    | Description                                                                                 | Required |
+|------------------|--------------------|------------|---------------------------------------------------------------------------------------------|----------|
+| `binding`        | string             | -          | Rate Limiter binding name (resolves to `ctx.env[binding]`).                                   | Yes      |
+| `keyGenerator`   | function           | -          | `(ctx) => string \| null \| undefined \| false`. Falsy key skips rate limiting.             | Yes      |
+| `successHandler` | function           | no-op      | `(ctx) => void`. Runs after `next()`; default no-op.                                        | No       |
+| `errorHandler`   | function           | throws 429 | `(ctx) => void`. Runs when limited; default throws `429`.                                   | No       |
+
+### Behavior
+
+* If `keyGenerator(ctx)` returns falsy, the middleware simply calls `next()`.
+* On `{ success: false }` from the binding, the default error handler throws `429`.
+* On `{ success: true }`, `next()` is executed; the success handler runs in `finally`.
+* Configure rate limit rules (limits/periods) via Wrangler; this middleware does not accept `limit/period` options.
+
+### wrangler.jsonc
+
+```jsonc
+{
+  // Wrangler v4.36.0+ required for Rate Limiting bindings
+  "ratelimits": [
+    {
+      "name": "RATE_LIMITER",          // binding name → available as env.RATE_LIMITER
+      "namespace_id": 1001,             // positive integer, unique per configuration
+      "simple": {
+        "limit": 100,                   // number of allowed requests in the window
+        "period": 60                    // window in seconds: must be 10 or 60
+      }
+    }
+  ]
+}
+```
+
+---
+
+---
+url: /middleware/combine.md
+---
+# @hoajs/combine
+
+Utility functions for composing middlewares, including `some`, `every`, and `except`, enabling more flexible composition and control over middleware execution.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { every, some } from '@hoajs/combine'
+import { RateLimiter } from '@hoajs/rate-limiter'
+import { basicAuth } from '@hoajs/basic-auth'
+import { ip } from '@hoajs/ip'
+
+const app = new Hoa()
+
+app.use(
+  some(
+    every(
+      ip({ allowList: ['192.168.0.2'] }),
+      basicAuth({ username: 'admin', password: '123456' })
+    ),
+    // If both conditions are met, RateLimiter will not execute.
+    RateLimiter(...)
+  )
+)
+
+export default app
+```
+
+## Methods
+
+### some(...middlewares)
+
+Create a combined middleware that runs the first middleware which returns `true`.
+
+* Executes middlewares in order; if a middleware returns `true` or returns nothing, stop executing the subsequent ones
+* If a middleware returns `false`, continue to the next middleware
+* If all middlewares return `false` or throw, the last error is thrown
+
+```js
+app.use(some(
+  (ctx) => ctx.req.method === 'GET',
+  (ctx) => ctx.req.method === 'POST',
+  (ctx) => {
+    ctx.status = 405
+    ctx.body = 'Method Not Allowed'
+    return true
+  }
+))
+```
+
+### every(...middlewares)
+
+Create a combined middleware that runs all middlewares. If any middleware returns `false` or throws, stop execution.
+
+* Executes all middlewares in order
+* If any middleware returns `false` or throws, stop and rethrow the error
+* Only when all middlewares pass will the downstream middleware continue
+
+```js
+app.use(every(
+  (ctx) => ctx.req.method === 'GET',
+  (ctx) => ctx.req.headers['x-auth-token'] === 'secret',
+  (ctx) => {
+    // Only reached when both prior conditions pass
+    ctx.state.user = { id: 1, name: 'admin' }
+  }
+))
+```
+
+### except(condition, ...middlewares)
+
+Create a combined middleware that executes the specified middlewares when the condition is not satisfied.
+
+* `condition`: a single condition function or an array of condition functions
+* `middlewares`: middlewares to execute when the condition is not met
+* If the condition function returns `true`, skip executing the middlewares
+* If the condition function returns `false`, execute the middlewares
+
+```js
+// Execute middlewares when the request method is not GET
+app.use(except(
+  (ctx) => ctx.req.method === 'GET',
+  (ctx, next) => {
+    ctx.status = 405
+    ctx.body = 'Only GET method is allowed'
+  }
+))
+
+// Use multiple conditions
+app.use(except(
+  [
+    (ctx) => ctx.req.method === 'GET',
+    (ctx) => ctx.req.method === 'POST'
+  ],
+  (ctx) => {
+    ctx.status = 405
+    ctx.body = 'Only GET and POST methods are allowed'
+  }
+))
+```
+
+## Type Definitions
+
+| Type/Function | Description | Parameters | Returns |
+|---------------|-------------|------------|---------|
+| `Condition` | Condition function type | `ctx: HoaContext` | `boolean` |
+| `some` | Continue when any middleware passes | `...middlewares: (HoaMiddleware \| Condition)[]` | `HoaMiddleware` |
+| `every` | Continue only when all middlewares pass | `...middlewares: (HoaMiddleware \| Condition)[]` | `HoaMiddleware` |
+| `except` | Execute middlewares when condition fails | `condition: Condition \| Condition[], ...middlewares: HoaMiddleware[]` | `HoaMiddleware` |
+
+---
+
+---
+url: /middleware/compress.md
+---
+# @hoajs/compress
+
+Provide response compression (gzip/deflate) for Hoa, brotli (br) is not supported now.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { compress } from '@hoajs/compress'
+
+const app = new Hoa()
+app.use(compress())
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+## Options
+
+```ts
+interface CompressionOptions {
+  encoding?: 'gzip' | 'deflate'
+  threshold?: number // default 1024 bytes
+}
+```
+
+* encoding: Compression encoding.
+  * When not set, the encoding is selected based on the client's Accept-Encoding (gzip first, then deflate). If the client does not provide Accept-Encoding or it is empty, compression is skipped.
+  * When set, the specified encoding is used regardless of the client's Accept-Encoding.
+* threshold: Compression threshold in bytes. Default is 1024. Responses smaller than the threshold will not be compressed.
+
+## Examples
+
+```js
+// Select encoding based on client negotiation
+app.use(compress())
+
+// Force deflate, ignoring Accept-Encoding
+app.use(compress({ encoding: 'deflate' }))
+
+// Set threshold to 4KB
+app.use(compress({ threshold: 4 * 1024 }))
+```
+
+---
+
+---
+url: /middleware/cookie.md
+---
+# @hoajs/cookie
+
+Provides cookie read/write capabilities on request/response. Supports plain and signed cookies, prefix constraints (\_\_Secure- / \_\_Host-), and modern attributes like Partitioned.
+
+## Quick Start
+
+```ts
+import { Hoa } from 'hoa'
+import { cookie } from '@hoajs/cookie'
+
+const app = new Hoa()
+app.extend(cookie({
+  secret: 'your-secret',
+  defaultOptions: {
+    signed: false,
+    path: '/',
+    httpOnly: true,
+    secure: false,
+    sameSite: 'Lax',
+    maxAge: 7 * 24 * 60 * 60
+  }
+}))
+
+app.use(async (ctx) => {
+  const name = await ctx.req.getCookie('name')
+  ctx.res.body = `Hello, ${name}!`
+})
+
+export default app
+```
+
+## API
+
+* ctx.req.getCookie()
+* ctx.req.setCookie()
+* ctx.req.deleteCookie()
+* ctx.res.getCookie()
+* ctx.res.setCookie()
+* ctx.res.deleteCookie()
+
+#### getCookie(name, opts?): Promise\<string | undefined | false>
+
+* name: string - logical cookie name (without \_\_Secure- / \_\_Host- prefix)
+* opts?: object
+  * prefix?: 'secure' | 'host' - match cookies written with \_\_Secure- or \_\_Host- prefixes
+  * signed?: boolean - verify and decode signed cookie; returns false if signature is invalid; returns undefined if the cookie is missing or the adapter secret is not provided
+
+#### setCookie(name, value, opts?): Promise\<void>
+
+* name: string - logical cookie name (prefix applied automatically when opts.prefix is set)
+* value: string - cookie value
+* opts?: object
+  * path?: string, default '/'
+  * domain?: string
+  * maxAge?: number - seconds; effective when >= 0; floored
+  * expires?: Date
+  * httpOnly?: boolean
+  * secure?: boolean
+  * sameSite?: 'Lax' | 'Strict' | 'None'
+  * priority?: 'Low' | 'Medium' | 'High'
+  * partitioned?: boolean - requires secure=true
+  * prefix?: 'secure' | 'host'
+    * secure: writes as \_\_Secure-\<name>; enforces secure=true and path='/'
+    * host: writes as \_\_Host-\<name>; enforces secure=true and path='/'; strips domain
+  * signed?: boolean - requires adapter secret; uses HMAC-SHA256 to generate a signature
+
+#### deleteCookie(name): Promise\<void>
+
+* name: string - logical cookie name; deletes by setting Max-Age=0
+
+## Examples
+
+Write and read a plain cookie:
+
+```ts
+await ctx.req.setCookie('lang', 'zh-CN', { httpOnly: true })
+const lang = await ctx.req.getCookie('lang') // 'zh-CN'
+```
+
+Write a signed cookie:
+
+```ts
+await ctx.res.setCookie('sid', 'abc123', { signed: true, secure: true, sameSite: 'Lax' })
+const sid = await ctx.res.getCookie('sid', { signed: true }) // returns plaintext if signature is valid, otherwise false
+```
+
+Write/read with prefix:
+
+```ts
+await ctx.res.setCookie('id', '123', { prefix: 'secure' }) // actual name: __Secure-id
+const id = await ctx.res.getCookie('id', { prefix: 'secure' })
+```
+
+Delete cookie:
+
+```ts
+await ctx.res.deleteCookie('id')
+```
+
+---
+
+---
+url: /middleware/cors.md
+---
+# @hoajs/cors
+
+`@hoajs/cors` is a CORS (Cross-Origin Resource Sharing) middleware for Hoa. It adds the appropriate CORS response headers for both simple requests and preflight (OPTIONS) requests.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { cors } from '@hoajs/cors'
+
+const app = new Hoa()
+
+// Enable CORS for all routes with defaults
+app.use(cors())
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+Route-scoped CORS (with `@hoajs/router`):
+
+```js
+import { Hoa } from 'hoa'
+import { router } from '@hoajs/router'
+import { cors } from '@hoajs/cors'
+
+const app = new Hoa()
+app.extend(router())
+
+app.get('/public', cors(), async (ctx) => {
+  ctx.res.body = 'Public resource'
+})
+
+app.get('/private', cors({
+  origin: ['https://example.com', 'https://app.example.com'],
+  credentials: true
+}), async (ctx) => {
+  ctx.res.body = 'Private resource'
+})
+
+export default app
+```
+
+## Options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `origin` | `string \| string[] \| (origin, ctx) => string \| null \| Promise<string \| null>` | `'*'` | Allowed origin(s). Function can return the allowed origin or `null` to disallow. |
+| `allowMethods` | `string[] \| (origin, ctx) => string[] \| Promise<string[]>` | `['GET','HEAD','PUT','POST','DELETE','PATCH']` | Methods allowed for preflight requests (sent via `Access-Control-Allow-Methods`). |
+| `allowHeaders` | `string[]` | `[]` | Headers allowed in preflight. If empty, it echoes the request's `Access-Control-Request-Headers`. |
+| `maxAge` | `number` | `undefined` | Seconds the preflight response can be cached (`Access-Control-Max-Age`). |
+| `credentials` | `boolean` | `false` | Whether to allow credentials (`Access-Control-Allow-Credentials: true`). |
+| `exposeHeaders` | `string[]` | `[]` | Response headers exposed to the browser (`Access-Control-Expose-Headers`). |
+
+## Behavior Details
+
+* Access-Control-Allow-Origin
+  * If `origin` is `'*'`, the middleware sets `Access-Control-Allow-Origin: *`.
+  * If `credentials: true` and the computed allow origin is `'*'`, the middleware falls back to the exact request origin (if present) to comply with the CORS spec.
+  * For specific origins (string, array, function), when an origin is allowed and not `'*'`, it appends `Vary: Origin`.
+
+* Access-Control-Allow-Credentials
+  * Only set to `true` when returning a specific origin (not `'*'`).
+
+* Access-Control-Expose-Headers
+  * When `exposeHeaders` is provided, it sets `Access-Control-Expose-Headers` as a comma-separated list.
+
+* Preflight (OPTIONS) Requests
+  * If `maxAge` is defined, sets `Access-Control-Max-Age`.
+  * Resolves `allowMethods` (array or function) and sets `Access-Control-Allow-Methods` as a comma-separated list.
+  * Determines `allowHeaders`:
+    * If `allowHeaders` option is provided, it uses that list.
+    * Otherwise, it echoes the request's `Access-Control-Request-Headers` (if present) and appends `Vary: Access-Control-Request-Headers`.
+  * Ensures a proper 204 preflight response by removing entity headers (`Content-Length`, `Content-Type`) and sending an empty body.
+
+* Vary Header Merging
+  * When setting `Vary: Origin` or `Vary: Access-Control-Request-Headers`, existing `Vary` values are preserved and new entries are appended (e.g., `accept-encoding, Origin`).
+
+* Normalization & Deduplication
+  * The middleware trims and deduplicates header lists (`allowHeaders`, `exposeHeaders`) and methods for consistency before emitting headers.
+
+## Examples
+
+Allow a single origin:
+
+```js
+app.use(cors({ origin: 'https://example.com' }))
+```
+
+Allow multiple origins:
+
+```js
+app.use(cors({ origin: ['https://a.example.com', 'https://b.example.com'] }))
+```
+
+Dynamic origin (sync):
+
+```js
+app.use(cors({
+  origin: (origin, ctx) => origin === 'https://allowed.example.com' ? origin : null
+}))
+```
+
+Dynamic origin (async):
+
+```js
+app.use(cors({
+  origin: async (origin, ctx) => {
+    const allowed = await isAllowed(origin)
+    return allowed ? origin : null
+  }
+}))
+```
+
+Custom preflight methods:
+
+```js
+app.use(cors({ allowMethods: ['GET', 'POST'] }))
+```
+
+Dynamic preflight methods:
+
+```js
+app.use(cors({
+  allowMethods: async (origin, ctx) => {
+    // Decide based on origin or ctx
+    return ['GET', 'POST', 'PUT']
+  }
+}))
+```
+
+Expose custom headers to the browser:
+
+```js
+app.use(cors({ exposeHeaders: ['x-request-id', 'x-trace'] }))
+```
+
+Echo request headers on preflight (default):
+
+```js
+app.use(cors())
+// If the request includes Access-Control-Request-Headers,
+// the middleware echoes them via Access-Control-Allow-Headers
+```
+
+---
+
+---
+url: /middleware/csrf.md
+---
+# @hoajs/csrf
+
+`@hoajs/csrf` is a CSRF (Cross-Site Request Forgery) protection middleware for Hoa. It validates requests based on Origin, Referer, and Sec-Fetch-Site headers to prevent CSRF attacks.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { csrf } from '@hoajs/csrf'
+
+const app = new Hoa()
+
+// Enable CSRF protection for all routes with defaults
+app.use(csrf())
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+Route-scoped CSRF (with `@hoajs/router`):
+
+```js
+import { Hoa } from 'hoa'
+import { router } from '@hoajs/router'
+import { csrf } from '@hoajs/csrf'
+
+const app = new Hoa()
+app.extend(router())
+
+app.get('/public', async (ctx) => {
+  ctx.res.body = 'Public resource (no CSRF protection)'
+})
+
+app.post('/form', csrf(), async (ctx) => {
+  ctx.res.body = 'Form submitted'
+})
+
+app.post('/api', csrf({
+  origin: ['https://example.com', 'https://app.example.com'],
+  checkReferer: false
+}), async (ctx) => {
+  ctx.res.body = 'API request processed'
+})
+
+export default app
+```
+
+## Options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `origin` | `string \| string[] \| (origin, ctx) => boolean` | Same as request origin | Allowed origin(s). Function should return `true` to allow or `false` to disallow. By default, only requests from the same origin are allowed. |
+| `secFetchSite` | `'same-origin' \| 'same-site' \| 'cross-site' \| 'none' \| SecFetchSite[] \| (secFetchSite, ctx) => boolean` | `'same-origin'` | Allowed Sec-Fetch-Site header value(s). Function should return `true` to allow or `false` to disallow. |
+| `checkReferer` | `boolean` | `true` | Whether to validate the Referer header. When `true`, validates that Referer origin matches request origin. |
+| `allowedContentTypes` | `string[]` | `['application/x-www-form-urlencoded', 'multipart/form-data', 'text/plain', 'application/json', 'application/xml', 'text/xml']` | Content-Types that require CSRF protection. Requests with other Content-Types skip validation. |
+
+## Behavior Details
+
+* Safe Methods
+  * GET, HEAD, and OPTIONS requests are always allowed and skip CSRF validation.
+  * Only unsafe methods (POST, PUT, DELETE, PATCH, etc.) are validated.
+
+* Content-Type Filtering
+  * By default, only requests with common form/API Content-Types are validated.
+  * you can custom `allowedContentTypes` to allow other Content-Types.
+
+* Sec-Fetch-Site Header
+  * Modern browsers send this header automatically.
+  * Values: `'same-origin'`, `'same-site'`, `'cross-site'`, `'none'`.
+  * By default, only `'same-origin'` is allowed.
+
+* Origin Header
+  * Sent by browsers for cross-origin requests and some same-origin requests.
+  * By default, only the same origin as the request URL (`ctx.req.origin`) is allowed.
+
+* Referer Header
+  * When `checkReferer: true` (default), validates that Referer origin matches request origin.
+  * If Referer is present but invalid, the request is immediately rejected.
+  * Set `checkReferer: false` to skip Referer validation (e.g., for API endpoints where Referer may not be sent).
+
+* Validation Logic
+  * The middleware validates requests in the following order:
+    1. If Referer header is present and `checkReferer: true`, validates that Referer origin matches request origin.
+    2. If Referer validation fails, the request is rejected with 403 Forbidden.
+    3. Otherwise, validates either Sec-Fetch-Site header OR Origin header (at least one must pass).
+    4. If both Sec-Fetch-Site and Origin validations fail, the request is rejected with 403 Forbidden.
+
+## Examples
+
+Allow a single origin:
+
+```js
+app.use(csrf({ origin: 'https://example.com' }))
+```
+
+Allow multiple origins:
+
+```js
+app.use(csrf({ origin: ['https://a.example.com', 'https://b.example.com'] }))
+```
+
+Dynamic origin validation:
+
+```js
+app.use(csrf({
+  origin: (origin, ctx) => {
+    // Custom validation logic
+    return origin === 'https://allowed.example.com'
+  }
+}))
+```
+
+Allow same-site requests:
+
+```js
+app.use(csrf({ secFetchSite: ['same-origin', 'same-site'] }))
+```
+
+Dynamic Sec-Fetch-Site validation:
+
+```js
+app.use(csrf({
+  secFetchSite: (secFetchSite, ctx) => {
+    // Allow same-origin and same-site
+    return secFetchSite === 'same-origin' || secFetchSite === 'same-site'
+  }
+}))
+```
+
+Disable Referer validation:
+
+```js
+app.use(csrf({ checkReferer: false }))
+```
+
+Protect only specific Content-Types:
+
+```js
+app.use(csrf({ 
+  allowedContentTypes: ['application/json', 'application/xml'] 
+}))
+```
+
+Combined configuration for API endpoints:
+
+```js
+app.use(csrf({
+  origin: ['https://app.example.com', 'https://admin.example.com'],
+  secFetchSite: ['same-origin', 'same-site'],
+  checkReferer: false,
+  allowedContentTypes: ['application/json']
+}))
+```
+
+---
+
+---
+url: /middleware/etag.md
+---
+# @hoajs/etag
+
+Generate and validate HTTP ETags for Hoa responses. This middleware computes (or respects existing) entity tags and handles conditional requests using the `If-None-Match` header to reduce bandwidth and improve cache efficiency.
+
+## Quick Start
+
+```ts
+import { Hoa } from 'hoa'
+import { etag } from '@hoajs/etag'
+
+const app = new Hoa()
+app.use(etag())
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+## Options
+
+```ts
+export interface ETagOptions {
+  // Headers to keep on 304 responses. Compared case-insensitively.
+  retainedHeaders?: string[]
+  // Use weak validation (prefix ETag with W/)
+  weak?: boolean
+  // Custom digest generator: receives the full response bytes and returns a raw digest
+  generateDigest?: (body: Uint8Array) => ArrayBuffer | Promise<ArrayBuffer>
+}
+```
+
+* `weak` (default `false`)
+  * When `true`, ETag is emitted as `W/"<hash>"`.
+* `generateDigest` (optional)
+  * A function that receives all response bytes (`Uint8Array`) and returns an `ArrayBuffer` of the digest. If omitted, the middleware uses `crypto.subtle.digest('SHA-1', bytes)` when available.
+* `retainedHeaders` (default `[ 'cache-control', 'content-location', 'date', 'etag', 'expires', 'vary' ]`)
+  * Which headers are kept on 304 responses. Names are matched case-insensitively.
+
+## Examples
+
+### Strong vs Weak ETags
+
+```ts
+app.use(etag())              // strong (default): "<hash>"
+app.use(etag({ weak: true })) // weak: W/"<hash>"
+```
+
+### Custom Digest (SHA-256 via Web Crypto)
+
+```ts
+app.use(etag({
+  generateDigest: (bytes) => crypto.subtle.digest('SHA-256', bytes)
+}))
+```
+
+### Respect Pre-set ETag
+
+```ts
+app.use(etag())
+
+app.use(async (ctx) => {
+  // Set ETag before response body; etag() will respect it and skip recomputation
+  ctx.res.set('ETag', '"manual-tag"')
+  ctx.res.body = 'some content'
+})
+```
+
+### Conditional Requests with If-None-Match
+
+```ts
+// Register etag() before routes so it runs after downstream handlers
+app.use(etag())
+
+// GET/HEAD + If-None-Match: * -> 304 when a representation exists
+app.use(async (ctx, next) => {
+  if (ctx.path === '/avatar' && (ctx.req.method === 'GET' || ctx.req.method === 'HEAD')) {
+    ctx.res.body = 'image-content'
+    return
+  }
+  await next()
+})
+
+// Non-GET/HEAD + * -> not treated as a match by this middleware
+// App-level policy can reject modification with 412 when resource exists
+app.use(async (ctx, next) => {
+  if (ctx.path === '/avatar' && ctx.req.method === 'POST') {
+    if (ctx.req.get('If-None-Match') === '*') {
+      ctx.res.status = 412
+      ctx.res.body = 'Precondition Failed'
+      return
+    }
+    ctx.res.body = 'uploaded'
+    return
+  }
+  await next()
+})
+
+// Specific ETags are matched ignoring W/ and quotes
+app.use(async (ctx, next) => {
+  if (ctx.path === '/manual') {
+    ctx.res.set('ETag', 'W/"abc"') // If-None-Match: "abc" will be considered a match
+    ctx.res.body = { ok: true }
+    return
+  }
+  await next()
+})
+```
+
+---
+
+---
+url: /middleware/favicon.md
+---
+# @hoajs/favicon
+
+Favicon middleware for Hoa. Serves a favicon.ico file from base64 data or returns an empty response.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { favicon } from '@hoajs/favicon'
+
+const app = new Hoa()
+app.use(favicon())
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+## Options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `base64` | `string` | `undefined` | Base64 encoded favicon data (without data URI prefix). |
+| `mime` | `string` | `'image/x-icon'` | MIME type for Content-Type header. |
+| `maxAge` | `number` | `86400` | Cache duration in seconds (default: 1 day). |
+
+## Examples
+
+### Empty Favicon
+
+Returns an empty favicon with status 200:
+
+```js
+app.use(favicon())
+```
+
+### Base64 Favicon
+
+Serve a favicon from base64 encoded data:
+
+```js
+app.use(favicon({
+  base64: 'AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAA...'
+}))
+```
+
+### Custom MIME Type
+
+Serve a PNG favicon instead of ICO:
+
+```js
+app.use(favicon({
+  base64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+  mime: 'image/png'
+}))
+```
+
+### Custom Cache Duration
+
+Set cache to 1 hour (3600 seconds):
+
+```js
+app.use(favicon({
+  base64: 'xxx',
+  maxAge: 3600
+}))
+```
+
+### Disable Caching
+
+```js
+app.use(favicon({
+  base64: 'xxx',
+  maxAge: 0
+}))
+```
+
+## Notes
+
+* The middleware only responds to `/favicon.ico` requests.
+* Only GET and HEAD methods are handled; other methods pass through to the next middleware.
+* The base64 data is decoded once during initialization for better performance.
+* Cache-Control header is set to `public, max-age=<maxAge>`.
+* If no base64 data is provided, an empty response with status 200 is returned.
+
+---
+
+---
+url: /middleware/ip.md
+---
+# @hoajs/ip
+
+IP restriction middleware for Hoa. It allows or denies requests based on client IP using static addresses, CIDR notation, regular expressions, or custom functions.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { ip } from '@hoajs/ip'
+
+const app = new Hoa()
+
+app.use(ip({
+  // By default, client IP is read from 'CF-Connecting-IP' header.
+  // getIp: (ctx) => ctx.req.get('CF-Connecting-IP'),
+  allowList: ['127.0.0.1', '::1'],
+  denyList: ['203.0.113.0/24', /1.2.3.[0-9]{1,3}/],
+  denyHandler: (ctx) => ctx.throw(403, 'Forbidden')
+}))
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+## Options
+
+| Option | Type | Description |
+|---|---|---|
+| `getIp` | `(ctx) => string \| null \| undefined` | Resolve client IP from context. Defaults to reading `CF-Connecting-IP`. |
+| `allowList` | `IPRule[]` | Rules that allow a request when matched. If empty, all requests are allowed unless denied by `denyList`. |
+| `denyList` | `IPRule[]` | Rules that deny a request when matched. |
+| `denyHandler` | `(ctx) => void \| Promise<void>` | Invoked when a request is denied or IP is missing; mutate `ctx.res` or throw (`ctx.throw(403, 'Forbidden')`). Return values are ignored. |
+
+## Examples
+
+Basic allow/deny:
+
+```js
+app.use(ip({
+  allowList: ['127.0.0.1', '::1'],
+  denyList: ['203.0.113.0/24']
+}))
+```
+
+Regex rules:
+
+```js
+app.use(ip({
+  allowList: [/^8\.8\.8\.[0-3]$/],
+  denyList: [/^8\.8\.8\.2$/]
+}))
+```
+
+Function rule (IPv6 only):
+
+```js
+app.use(ip({
+  allowList: [(remote) => remote.type === 'IPv6']
+}))
+```
+
+Custom `getIp` with fallbacks:
+
+```js
+app.use(ip({
+  getIp: (ctx) =>
+    ctx.req.get('CF-Connecting-IP') ||
+    ctx.req.get('X-Real-IP') ||
+    ctx.req.get('X-Forwarded-For')?.split(',')[0]?.trim()
+}))
+```
+
+Match-all with override:
+
+```js
+app.use(ip({
+  allowList: ['*'],
+  denyList: ['203.0.113.10']
+}))
+```
+
+Priority (deny overrides allow):
+
+```js
+app.use(ip({
+  // Even if allowed, denyList takes precedence and blocks the request
+  allowList: ['127.0.0.0/8'],
+  denyList: ['127.0.0.1']
+}))
+```
+
+Allow only private IPv4 (common enterprise):
+
+```js
+app.use(ip({
+  // Only private ranges are allowed; everything else is denied
+  allowList: [
+    '10.0.0.0/8',
+    '172.16.0.0/12',
+    '192.168.0.0/16'
+  ]
+}))
+```
+
+Custom deny handler:
+
+```js
+app.use(ip({
+  getIp: () => undefined,
+  denyHandler: (ctx) => {
+    ctx.res.status = 418
+    ctx.res.body = 'No IP'
+    // or
+    // ctx.throw(418, 'No IP')
+  }
+}))
+```
+
+---
+
+---
+url: /middleware/json.md
+---
+# @hoajs/json
+
+Format route responses into a consistent JSON envelope for success and error cases in Hoa.
+
+* Builds a success body using the success schema.
+* Catches errors, optionally merges error headers, and builds a failure body using the fail schema.
+* Skips building a body for HEAD and OPTIONS requests.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { json } from '@hoajs/json'
+
+const app = new Hoa()
+app.use(json())
+
+app.use(async (ctx, next) => {
+  if (ctx.req.pathname === '/') {
+    ctx.res.body = 'Hello, Hoa!'
+  }
+  if (ctx.req.pathname === '/error') {
+    ctx.throw(400, 'Bad request')
+  }
+})
+```
+
+* Request to `/`:
+  * Response status: 200
+  * Response JSON body: `{ code: 200, data: "Hello, Hoa!" }`
+* Request to `/error`:
+  * Response status: 400
+  * Response JSON body: `{ code: 400, message: "Bad request" }`
+
+## Options
+
+* status: `number | ((ctx: HoaContext, error?: Error) => number | Promise<number>)`
+  * Status schema or a fixed status code. If a function, it is called as `(ctx, error?)` and may be async.
+  * Default: for success, uses `ctx.res.status`; for failure, uses `error.status || error.statusCode || 500`.
+
+* success: `Record<string, ((ctx: HoaContext) => any | Promise<any>) | any>`
+  * Keys and resolvers used to compose the success JSON body; values may be literals or async functions.
+  * Default: `{ code: ctx.res.status, data: ctx.res.body || null }`.
+
+* fail: `Record<string, ((ctx: HoaContext, error: Error) => any | Promise<any>) | any>`
+  * Keys and resolvers used to compose the error JSON body; values may be literals or async functions.
+  * Default: `{ code: error.status || error.statusCode || 500, message: e.expose ? e.message : statusTextMapping[e.status || e.statusCode || 500] }`.
+
+## Examples
+
+### Force success status to 200
+
+```js
+app.use(json({ status: 200 }))
+
+// Route sets custom status; wrapper still responds with 200
+app.use(async (ctx, next) => {
+  if (ctx.req.pathname === '/') {
+    ctx.res.status = 201
+    ctx.res.body = 'Hello, Hoa!'
+    return
+  }
+  await next()
+})
+```
+
+Response status: 200, body:
+
+```json
+{ "code": 201, "data": "Hello, Hoa!" }
+```
+
+### Custom success schema
+
+```js
+app.use(json({
+  success: {
+    code: () => 204,
+    data: () => 'No content'
+  }
+}))
+```
+
+Response status: 200, body:
+
+```json
+{ "code": 204, "data": "No content" }
+```
+
+### Custom fail schema
+
+```js
+app.use(json({
+  fail: {
+    code: () => 410,
+    data: () => 'Gone'
+  }
+}))
+
+app.use(async (ctx, next) => {
+  if (ctx.req.pathname === '/error') {
+    ctx.throw(400, 'Bad request')
+  }
+  await next()
+})
+```
+
+Response status: 400, body:
+
+```json
+{ "code": 410, "data": "Gone" }
+```
+
+### Error headers merge
+
+If the thrown error contains a `headers` property, those headers are merged into the response.
+
+```js
+app.use(async (ctx) => {
+  if (ctx.req.pathname === '/error-headers') {
+    ctx.throw(418, { message: "I'm a teapot", headers: { 'x-error-id': 'abc123' } })
+  }
+})
+```
+
+Response:
+
+* status: 418
+* headers: `{ "x-error-id": "abc123" }`
+* body: `{ "code": 418, "message": "I'm a teapot" }`
+
+The middleware automatically merges any error.headers into ctx.res.headers, allowing custom error metadata to propagate to the client.
+
+### HEAD/OPTIONS example
+
+The JSON middleware skips building a body for HEAD and OPTIONS requests.
+
+```js
+app.use(async (ctx) => {
+  if (ctx.req.method === 'HEAD' && ctx.req.pathname === '/head') {
+    ctx.res.status = 204
+    return
+  }
+  if (ctx.req.method === 'OPTIONS' && ctx.req.pathname === '/options') {
+    ctx.res.set('Allow', 'GET,HEAD,OPTIONS')
+    ctx.res.status = 204
+    return
+  }
+})
+
+// HEAD request
+const headRes = await app.fetch(new Request('http://localhost/head', { method: 'HEAD' }))
+// HTTP status: 204
+// Response body: '' (empty) — JSON body is not constructed for HEAD
+
+// OPTIONS request
+const optionsRes = await app.fetch(new Request('http://localhost/options', { method: 'OPTIONS' }))
+// HTTP status: 204
+// Headers: { 'Allow': 'GET,HEAD,OPTIONS' }
+// Response body: '' (empty) — JSON body is not constructed for OPTIONS
+```
+
+## Raw mode
+
+Enable raw response mode to bypass JSON formatting when necessary.
+
+* Success path: When `ctx._raw` is truthy, the middleware does nothing — it preserves `ctx.res.status` and `ctx.res.body` as-is.
+* Error path: When `ctx._raw` is truthy and an error is thrown, the middleware rethrows the error. The application's default error handler responds with plain text and merges `err.headers` into the response.
+
+Example (success):
+
+```js
+app.use(json())
+app.use(async (ctx) => {
+  if (ctx.req.pathname === '/raw') {
+    ctx._raw = true
+    ctx.res.status = 200
+    ctx.res.body = { ok: true }
+  }
+})
+// Response: status 200, JSON body { "ok": true }
+```
+
+Example (error):
+
+```js
+app.use(json())
+app.use(async (ctx) => {
+  if (ctx.req.pathname === '/raw-error') {
+    ctx._raw = true
+    ctx.throw(418, { message: "I'm a teapot", headers: { 'x-error-id': 'raw123' } })
+  }
+})
+// Response: status 418, header 'x-error-id: raw123', plain text body "I'm a teapot"
+```
+
+---
+
+---
+url: /middleware/jwt.md
+---
+# @hoajs/jwt
+
+JSON Web Token (JWT) middleware for Hoa.
+
+Supported scenarios:
+
+* HS\* verification with a shared secret (e.g., HS256)
+* RS\* verification and signing using local PEM/KeyLike (e.g., RS256)
+* Asymmetric verification via remote JWKS (typically RS256)
+* Dynamic secret resolution (function-based, returning key material based on the token)
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { jwt } from '@hoajs/jwt'
+
+const app = new Hoa()
+app.use(jwt({ secret: 'shhhh', algorithms: ['HS256'] }))
+
+app.use(async (ctx) => {
+  // After verification, the payload is stored on ctx.state.user (configurable via `key`)
+  ctx.res.body = `Hello, ${ctx.state.user.name}!`
+})
+
+export default app
+```
+
+## Options
+
+* secret: Secret or key material for verification (string/Uint8Array/CryptoKey/KeyLike), or a function (token) => key; can be omitted when using jwksUri only
+* algorithms: Allowed algorithms, default \['HS256']
+* getToken: Custom method to extract the token from the request (default reads from Authorization: Bearer)
+* cookie: When Authorization is empty, read the token from this cookie name
+* key: The key on ctx.state to store the verified payload, default 'user'
+* credentialsRequired: When true, missing token results in 401; when false, calls next() directly. default true
+* passthrough: When true, do not throw on verification failure; just next(). default false
+* isRevoked: Optional revocation check; returning true treats the token as revoked
+* issuer/audience/subject/clockTolerance: Corresponding claim checks and clock skew tolerance
+* jwksUri: Remote JWKS endpoint (typically used with RS256)
+
+## Examples
+
+### Remote JWKS verification
+
+```js
+app.use(jwt({ jwksUri: 'https://example.com/.well-known/jwks.json', algorithms: ['RS256'] }))
+```
+
+> Note: When `jwksUri` is provided, verification uses the remote key set (JWKS). If neither `jwksUri` nor `secret` is configured, verification will throw "Verification secret is not configured".
+
+### Custom token extraction
+
+```js
+app.use(jwt({
+  secret: 'shhhh',
+  algorithms: ['HS256'],
+  getToken: (ctx) => ctx.req.get('X-Auth') || null
+}))
+```
+
+### Use Cookie as a fallback
+
+```js
+app.use(jwt({ secret: 'shhhh', algorithms: ['HS256'], cookie: 'auth' }))
+```
+
+### Customize ctx.state key
+
+```js
+app.use(jwt({ secret: 'shhhh', algorithms: ['HS256'], key: 'auth' }))
+app.use(async (ctx) => {
+  ctx.res.body = `Welcome, ${ctx.state.auth.name}!`
+})
+```
+
+### Passthrough and revocation check
+
+```js
+app.use(jwt({ secret: 'shhhh', algorithms: ['HS256'], passthrough: true }))
+app.use(async (ctx) => {
+  // Even if the token is invalid, control continues here (passthrough=true)
+  ctx.res.body = 'OK'
+})
+
+app.use(jwt({
+  secret: 'shhhh',
+  algorithms: ['HS256'],
+  isRevoked: async (ctx, payload) => {
+    // token revocation logic here
+  }
+}))
+```
+
+## Utilities
+
+### signJWT
+
+signJWT(payload, secret, options): Generate a signed token; for RS\* pass a private key PEM/KeyLike, for HS\* pass a shared secret string
+
+* payload: Object/JWTPayload, the claims to include in the token (custom fields allowed). Issued-at (iat) is set automatically.
+* secret: string | Uint8Array | CryptoKey | KeyLike. For HS\* pass a shared secret string; for RS\* pass a private key (PEM or KeyLike).
+* options:
+  * algorithm: string. Default 'HS256'. Example: 'HS256', 'RS256'.
+  * issuer: string. Sets the `iss` claim.
+  * audience: string. Sets the `aud` claim.
+  * subject: string. Sets the `sub` claim.
+  * expiresIn: string | number. Expiration, e.g. '1h', '30m', or seconds.
+  * header: JWS header parameters. Merged into protected header (e.g., `{ kid: 'key-id' }`).
+* returns: Promise\<string> – the compact JWT string.
+
+HS256 signing:
+
+```js
+import { signJWT } from '@hoajs/jwt'
+
+const secret = 'shhhh'
+const token = await signJWT(
+  { name: 'Alice' },
+  secret,
+  { algorithm: 'HS256', expiresIn: '1h', header: { kid: 'hs1' } }
+)
+```
+
+RS256 signing with PEM:
+
+```js
+import { signJWT } from '@hoajs/jwt'
+
+const privatePem = `-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----`
+const token = await signJWT(
+  { uid: 1 },
+  privatePem,
+  { algorithm: 'RS256', expiresIn: '1h' }
+)
+```
+
+### verifyJWT
+
+verifyJWT(token, options): Verify a token; supports secret/jwksUri/function-based secret
+
+* token: string. The JWT compact string to verify.
+* options:
+  * secret: string | Uint8Array | CryptoKey | KeyLike | (token) => Promise\<secret>. Verification key/secret. For RS\* typically a public key (PEM/KeyLike). When using `jwksUri`, `secret` can be omitted.
+  * algorithms: string\[]. Allowed algorithms. Default \['HS256']; set to \['RS256'] for RS256/JWKS.
+  * issuer: string | string\[]. Expected issuer(s) to validate the `iss` claim.
+  * audience: string | string\[]. Expected audience(s) to validate the `aud` claim.
+  * subject: string. Expected subject to validate the `sub` claim.
+  * clockTolerance: string | number. Allowed clock skew (e.g., '5s' or 5).
+  * jwksUri: string. Remote JWKS endpoint for asymmetric verification (uses a remote key set).
+* returns: Promise<{ payload: JWTPayload; protectedHeader: JWSHeaderParameters }>
+
+Verify HS256 token with a shared secret:
+
+```js
+import { verifyJWT } from '@hoajs/jwt'
+
+const secret = 'shhhh'
+const { payload, protectedHeader } = await verifyJWT(token, {
+  secret,
+  algorithms: ['HS256'],
+  issuer: 'example-issuer',
+  audience: 'example-audience',
+  clockTolerance: '5s'
+})
+```
+
+Verify RS256 token with public PEM:
+
+```js
+import { verifyJWT } from '@hoajs/jwt'
+
+const publicPem = `-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----`
+const { payload } = await verifyJWT(token, {
+  secret: publicPem,
+  algorithms: ['RS256']
+})
+```
+
+Verify via remote JWKS:
+
+```js
+import { verifyJWT } from '@hoajs/jwt'
+
+const { payload } = await verifyJWT(tokenFromClient, {
+  jwksUri: 'https://example.com/.well-known/jwks.json',
+  algorithms: ['RS256']
+})
+```
+
+Verify with function-based secret (dynamic):
+
+```js
+import { verifyJWT } from '@hoajs/jwt'
+
+const { payload } = await verifyJWT(token, {
+  secret: async (t) => process.env.JWT_SECRET,
+  algorithms: ['HS256']
+})
+```
+
+---
+
+---
+url: /middleware/language.md
+---
+# @hoajs/language
+
+`@hoajs/language` is a language detection middleware for Hoa. It automatically detects the user's preferred language from various sources and makes it available via `ctx.language`.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { language } from '@hoajs/language'
+import { cookie } from '@hoajs/cookie'
+
+const app = new Hoa()
+
+// Cookie plugin is required for caching & detection
+app.extend(cookie())
+
+// Enable language detection with defaults
+app.use(language())
+
+app.use(async (ctx) => {
+  ctx.res.body = `Hello, your language is: ${ctx.language}`
+})
+
+export default app
+```
+
+Route-scoped language detection:
+
+```js
+import { Hoa } from 'hoa'
+import { router } from '@hoajs/router'
+import { language } from '@hoajs/language'
+import { cookie } from '@hoajs/cookie'
+
+const app = new Hoa()
+app.extend(router())
+app.extend(cookie())
+
+// Different language settings for different routes
+app.get('/api', language({
+  supportedLanguages: ['en', 'fr', 'de'],
+  fallbackLanguage: 'en'
+}), async (ctx) => {
+  ctx.res.body = { language: ctx.language }
+})
+
+app.get('/admin', language({
+  supportedLanguages: ['en'],
+  fallbackLanguage: 'en',
+  order: ['header'] // Only check Accept-Language header
+}), async (ctx) => {
+  ctx.res.body = { language: ctx.language }
+})
+
+export default app
+```
+
+## Options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `order` | `DetectorType[]` | `['querystring', 'cookie', 'header']` | Order of language detection strategies. |
+| `lookupQueryString` | `string` | `'lang'` | Query parameter name for language detection. |
+| `lookupCookie` | `string` | `'language'` | Cookie name for language detection. |
+| `lookupFromPathIndex` | `number` | `0` | Index in URL path where language code appears. |
+| `lookupFromHeaderKey` | `string` | `'accept-language'` | Header key for language detection. |
+| `caches` | `CacheType[] \| false` | `['cookie']` | Caching strategies. Set to `false` to disable caching. |
+| `ignoreCase` | `boolean` | `true` | Whether to ignore case in language codes. |
+| `fallbackLanguage` | `string` | `'en'` | Default language if none detected. |
+| `supportedLanguages` | `string[]` | `['en']` | List of supported language codes. |
+| `convertDetectedLanguage` | `(lang: string) => string` | `undefined` | Optional function to transform detected language codes. |
+| `debug` | `boolean` | `false` | Enable debug logging. |
+
+## Detection Strategies
+
+The middleware supports multiple detection strategies that are tried in order:
+
+### Query String Detection
+
+Detects language from URL query parameters:
+
+```
+https://example.com/?lang=fr
+```
+
+### Cookie Detection
+
+Detects language from cookies using the specified cookie name. Requires the `@hoajs/cookie` plugin.
+
+### Header Detection
+
+Detects language from the `Accept-Language` HTTP header, parsing quality values and selecting the best match.
+
+### Path Detection
+
+Detects language from URL path segments:
+
+```
+https://example.com/en/products  // Detects 'en' from path
+```
+
+## Behavior Details
+
+* **Language Normalization**
+  * Detected languages are trimmed and optionally case-insensitive
+  * Custom transformation can be applied via `convertDetectedLanguage`
+  * Only languages in `supportedLanguages` are accepted
+
+* **Fallback Logic**
+  * If no language is detected from any strategy, uses `fallbackLanguage`
+  * Fallback language must be included in `supportedLanguages`
+
+* **Caching**
+  * When `caches: ['cookie']` is enabled, detected language is stored in a cookie
+  * Cookie caching requires the `@hoajs/cookie` plugin
+  * Set `caches: false` to disable caching
+
+* **Error Handling**
+  * Detection errors are logged (if debug enabled) and don't break the middleware
+  * Invalid detector configurations throw errors during initialization
+
+## Examples
+
+Basic setup with multiple languages:
+
+```js
+app.use(language({
+  supportedLanguages: ['en', 'fr', 'de', 'es', 'ja'],
+  fallbackLanguage: 'en'
+}))
+```
+
+Custom detection order:
+
+```js
+app.use(language({
+  order: ['path', 'querystring', 'header'],
+  lookupFromPathIndex: 0,
+  caches: false // Disable cookie caching
+}))
+```
+
+Path-based language detection:
+
+```js
+// For URLs like /en/home, /fr/contact
+app.use(language({
+  order: ['path'],
+  lookupFromPathIndex: 0,
+  supportedLanguages: ['en', 'fr', 'de'],
+  fallbackLanguage: 'en'
+}))
+```
+
+Custom language transformation:
+
+```js
+app.use(language({
+  supportedLanguages: ['en-US', 'fr-FR', 'de-DE'],
+  convertDetectedLanguage: (lang) => {
+    // Convert 'en' to 'en-US', 'fr' to 'fr-FR', etc.
+    const shortCode = lang.split('-')[0]
+    return `${shortCode}-${shortCode.toUpperCase()}`
+  }
+}))
+```
+
+Header-only detection (no caching):
+
+```js
+app.use(language({
+  order: ['header'],
+  caches: false,
+  supportedLanguages: ['en', 'fr'],
+  fallbackLanguage: 'en'
+}))
+```
+
+Debug mode for development:
+
+```js
+app.use(language({
+  supportedLanguages: ['en', 'fr', 'de'],
+  debug: true // Logs detection attempts and results
+}))
+```
+
+## Requirements
+
+* The cookie plugin (e.g., `@hoajs/cookie`) is required when using cookie caching & detection
+* Fallback language must be included in supported languages
+* Path index must be non-negative
+
+---
+
+---
+url: /middleware/logger.md
+---
+# @hoajs/logger
+
+Logger middleware for Hoa. It logs the incoming request and the outgoing response with method, path, status, and elapsed time.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { logger } from '@hoajs/logger'
+
+const app = new Hoa()
+app.use(logger())
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+Examples of log lines (without ANSI color):
+
+```
+<-- GET /users
+--> GET /users 200 12ms
+xxx GET /users 500 2s
+```
+
+## Color output
+
+By default, color is enabled only when the current stdout is a TTY. You can override this behavior using environment variables:
+
+* `NO_COLOR=1`: disable color output
+* `FORCE_COLOR=0`: force disable color output
+* `FORCE_COLOR=1` (or any truthy value): force enable color output
+
+Color scheme:
+
+* 2xx: green
+* 3xx: cyan
+* 4xx: yellow
+* 5xx: red
+
+> Note: Colors are applied only to the status code part of the outgoing/error log lines.
+
+## Custom printer
+
+You can pass a custom printer function to control where and how the log line is written. By default, it uses `console.log`.
+
+```ts
+type Printer = (str: string, ...rest: string[]) => void
+function logger(printer?: Printer): (ctx: import('hoa').HoaContext, next: () => Promise<void>) => Promise<void>
+```
+
+Examples:
+
+```js
+// Write logs to a file
+import fs from 'node:fs'
+const stream = fs.createWriteStream('./access.log', { flags: 'a' })
+app.use(logger((line) => stream.write(line + '\n')))
+
+// Forward logs to a structured logger
+import pino from 'pino'
+const log = pino()
+app.use(logger((line) => log.info({ msg: line })))
+```
+
+## Notes
+
+* The middleware does not modify the response; it only observes and logs.
+* When an error is thrown, the status is resolved from `err.status`, `err.statusCode`, or falls back to `500`.
+* The path includes query string: e.g. `/users?page=2`.
+
+---
+
+---
+url: /middleware/method-override.md
+---
+# @hoajs/method-override
+
+Middleware to override the HTTP method. Useful when clients are limited to sending `POST` or `GET`, but you need to perform actions like `DELETE`, `PUT`, or `PATCH` by declaring the target method in a conventional field.
+
+Defaults:
+
+* Applies only when the original method is included in `allowedMethods` (default `['POST']`).
+* Reads the target method from three sources in order: `query -> form -> header`.
+* `query` and `form` default to the key `_method`; `header` defaults to `x-http-method-override`.
+* If the resolved method is not in the supported list, a 400 error is thrown.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { methodOverride } from '@hoajs/method-override'
+
+const app = new Hoa()
+app.use(methodOverride())
+
+app.use(async (ctx) => {
+  // POST http://localhost/?_method=DELETE -> ctx.req.method === 'DELETE'
+  ctx.res.body = ctx.req.method
+})
+
+export default app
+```
+
+## Options
+
+```ts
+interface OverrideMiddlewareOptions {
+  // Original methods that are allowed to be overridden; default ['POST']
+  allowedMethods?: string[]
+
+  // Key names for each source; pass false to disable a source
+  sources?: {
+    query?: string | false
+    form?: string | false
+    header?: string | false
+  }
+}
+```
+
+## Examples
+
+Override via Query:
+
+```bash
+curl -X POST 'http://localhost:3000/?_method=DELETE'
+# Response body will be 'DELETE'
+```
+
+Override via Header:
+
+```bash
+curl -X POST 'http://localhost:3000/' \
+  -H 'x-http-method-override: PUT'
+# Response body will be 'PUT'
+```
+
+Override via Form (urlencoded):
+
+```bash
+curl -X POST 'http://localhost:3000/' \
+  -H 'content-type: application/x-www-form-urlencoded' \
+  --data '_method=PATCH&name=alice'
+# Response body will be 'PATCH'
+```
+
+Override via Form (multipart):
+
+```bash
+curl -X POST 'http://localhost:3000/' \
+  -F '_method=PROPFIND' -F 'file=@/path/to/file'
+# Response body will be 'PROPFIND'
+```
+
+Enable overriding on `GET` requests as well:
+
+```js
+app.use(methodOverride({ allowedMethods: ['POST', 'GET'] }))
+```
+
+Disable the header source and allow only query/form:
+
+```js
+app.use(methodOverride({ sources: { header: false } }))
+```
+
+Change the query key to `__m` and the header key to `x-override`:
+
+```js
+app.use(methodOverride({
+  sources: {
+    query: '__m',
+    header: 'x-override'
+  }
+}))
+```
+
+---
+
+---
+url: /middleware/view/mustache.md
+---
+# @hoajs/mustache
+
+A Mustache-based view renderer extension for Hoa. It adds `ctx.render(template, view, partials?)` so you can generate HTML strings in middleware and send them as the response body.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { mustache } from '@hoajs/mustache'
+
+const app = new Hoa()
+app.extend(mustache())
+
+const userTemplate = '<p>Hello, my name is {{name}}. I have {{kids.length}} kids:</p><ul>{{#kids}}{{> kid}}{{/kids}}</ul>'
+const kidTemplate = '<li>{{name}} is {{age}}</li>'
+
+app.use(async (ctx) => {
+  const html = ctx.render(
+    userTemplate,
+    {
+      name: 'David',
+      kids: [
+        { name: 'Jack', age: 18 },
+        { name: 'John', age: 20 }
+      ]
+    },
+    {
+      kid: kidTemplate
+    }
+  )
+
+  ctx.res.body = html
+})
+
+export default app
+```
+
+## Options
+
+* `cache` (default `true`): Enables template caching to improve render performance. When disabled, Mustache’s template cache is turned off.
+* `tags` (default `['{{', '}}']`): Custom Mustache delimiters, e.g. `['<%', '%>']`.
+* `escape` (default uses Mustache’s built-in HTML escape): Custom escape function. Must return an HTML-safe string.
+
+## Examples
+
+```js
+import { mustache } from '@hoajs/mustache'
+
+// Disable cache
+app.extend(mustache({ cache: false }))
+
+// Custom delimiters
+app.extend(mustache({ tags: ['<%', '%>'] }))
+
+// Custom escape function
+const entityMap = {
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '/': '&#x2F;',
+  '`': '&#x60;', '=': '&#x3D;', ':': '&#x3A;', '(': '&#40;', ')': '&#41;'
+}
+app.extend(mustache({
+  escape: (string) => String(string).replace(/[&<>"'`=/:()]/g, (s) => entityMap[s])
+}))
+```
+
+## Partials
+
+```js
+const list = '{{#items}}{{> item}}{{/items}}'
+
+// String partial
+ctx.res.body = ctx.render(list, { items: [{ name: 'A' }, { name: 'B' }] }, {
+  item: '<li>{{name}}</li>'
+})
+
+// Function partial (if your project uses Mustache's functional partials)
+ctx.res.body = ctx.render(list, { items: [{ name: 'A' }, { name: 'B' }] }, {
+  item: (view) => `<li>${view.name.toLowerCase()}</li>`
+})
+```
+
+---
+
+---
+url: /middleware/validator/nana.md
+---
+# @hoajs/nana
+
+Nana validator middleware for Hoa.
+
+`nanaValidator` reads values from `ctx.req` using the keys you define in the schema:
+
+* `{ query: object({...}) }` → `ctx.req.query`.
+* `{ headers: object({...}) }` → `ctx.req.headers`.
+* `{ params: object({...}) }` → `ctx.req.params` (requires `@hoajs/router` to populate `params`).
+* `{ body: object({...}) }` → `ctx.req.body` (requires `@hoajs/bodyparser` to populate `body`).
+
+On success, the validated value is written back to `ctx.req[key]`.
+On failure, the underlying `nana.validate` call returns an error and `nanaValidator` calls `ctx.throw(error.status || 400, error.message)`.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { router } from '@hoajs/router'
+import { nanaValidator } from '@hoajs/nana'
+import { object, string, number } from 'nana'
+
+const app = new Hoa()
+app.extend(router())
+
+app.get(
+  '/users/:name',
+  nanaValidator({
+    params: object({
+      name: string(),
+      age: number()
+    })
+    // query: object({...}),
+    // headers: object({...}),
+    // body: object({...}),
+    // ...
+  }),
+  async (ctx) => {
+    const { name, age } = ctx.req.params
+    ctx.res.body = `Hello, ${name}! You are ${age}.`
+  }
+)
+
+export default app
+```
+
+## Examples
+
+* Validate query parameters
+
+```js
+import { object, string } from 'nana'
+
+app.get(
+  '/search',
+  nanaValidator({ query: object({ key1: string(), key2: string() }) }),
+  (ctx) => { ctx.res.body = { valid: ctx.req.query } }
+)
+```
+
+* Validate JSON body (with `@hoajs/bodyparser`)
+
+```js
+import { object, string, number } from 'nana'
+
+app.post(
+  '/orders',
+  nanaValidator({
+    body: object({
+      id: string(),
+      amount: number()
+    })
+  }),
+  (ctx) => {
+    // ctx.req.body is now validated and typed
+    ctx.res.body = { ok: true, order: ctx.req.body }
+  }
+)
+```
+
+* Validate headers
+
+```js
+import { object, string } from 'nana'
+
+app.use(nanaValidator({
+  headers: object({
+    'x-api-key': string()
+  })
+}))
+```
+
+* Use `pipe` for composed validation
+
+```js
+import { object, string, number, pipe, check } from 'nana'
+
+app.post(
+  '/products',
+  nanaValidator({
+    body: object({
+      name: string(),
+      price: pipe(
+        number(),
+        check((value) => value >= 0, 'price must be >= 0')
+      )
+    })
+  }),
+  (ctx) => {
+    ctx.res.body = ctx.req.body
+  }
+)
+```
+
+* Use `check` for custom rules on query
+
+```js
+import { object, number, check } from 'nana'
+
+app.get(
+  '/posts',
+  nanaValidator({
+    query: object({
+      page: check((value) => value > 0, 'must be positive')
+    })
+  }),
+  (ctx) => {
+    ctx.res.body = { page: ctx.req.query.page }
+  }
+)
+```
+
+* Use `transform` to normalize input
+
+```js
+import { object, string, transform } from 'nana'
+
+app.post(
+  '/comments',
+  nanaValidator({
+    body: object({
+      content: pipe(
+        string(),
+        transform((value) => value.trim())
+      )
+    })
+  }),
+  (ctx) => {
+    // content has been trimmed already
+    ctx.res.body = { content: ctx.req.body.content }
+  }
+)
+```
+
+## Error handling
+
+`nana` validators throw `Error` instances with useful properties like `expected`, `actual`, and `path`.
+`nanaValidator` converts them into HTTP errors via `ctx.throw`:
+
+* Status code: `error.status` if present, otherwise `400`.
+* Body: `error.message`.
+
+You can customize the error behaviour in your own validators, for example by throwing an `HttpError` with a custom status code:
+
+```js
+import { HttpError } from 'hoa'
+import { createValidator } from 'nana'
+
+const positiveNumber = createValidator('positiveNumber', (value, ctx) => {
+  if (typeof value !== 'number' || value <= 0) {
+    throw new HttpError(422, `(${ctx.path}: ${value}) ✖ positiveNumber`)
+  }
+})
+
+app.use(nanaValidator({ query: object({ page: positiveNumber() }) }))
+```
+
+---
+
+---
+url: /middleware/powered-by.md
+---
+# @hoajs/powered-by
+
+`@hoajs/powered-by` is a middleware for Hoa that adds a `X-Powered-By` header to responses.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { poweredBy } from '@hoajs/powered-by'
+
+const app = new Hoa()
+
+// Enable PoweredBy middleware for all routes with defaults
+app.use(poweredBy('MyApp'))
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+## Options
+
+| Option                | Type | Default | Description                                |
+|-----------------------| --- | --- |--------------------------------------------|
+| `serverName`          | `string` | `'Hoa'` | Server name to set in `X-Powered-By` header. |
+
+---
+
+---
+url: /middleware/request-id.md
+---
+# @hoajs/request-id
+
+Generate and propagate a traceable Request ID for each request and response to help with log correlation, debugging, and cross-service tracing.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { requestId } from '@hoajs/request-id'
+
+const app = new Hoa()
+app.use(requestId())
+
+app.use(async (ctx) => {
+  ctx.res.body = `Hello, ${ctx.state.requestId}!`
+})
+
+export default app
+```
+
+## Options
+
+```ts
+interface RequestIdOptions {
+  // Maximum length (default: 255)
+  limitLength?: number
+  // Response header name (default: 'X-Request-Id'); set '' to disable header read/write
+  headerName?: string
+  // Custom ID generator (default: crypto.randomUUID); ctx will be passed to the function
+  generator?: (ctx: import('hoa').HoaContext) => string
+}
+```
+
+* limitLength: Limits the maximum length of the request ID; if exceeded, a new ID will be generated.
+* headerName: The header name used to read/write the ID; pass an empty string '' to disable reading from the request header and writing the response header.
+* generator: Custom ID generation logic; receives ctx; defaults to `crypto.randomUUID()`.
+
+## Examples
+
+* Custom response header name:
+
+```js
+app.use(requestId({ headerName: 'X-Correlation-Id' }))
+```
+
+* Disable reading request header and writing response header:
+
+```js
+app.use(requestId({ headerName: '' }))
+```
+
+* Custom ID generator:
+
+```js
+app.use(requestId({
+  generator: (ctx) => `${ctx.app.name}-${Date.now()}`
+}))
+```
+
+---
+
+---
+url: /middleware/response-time.md
+---
+# @hoajs/response-time
+
+Response time middleware for Hoa. It measures the elapsed time using `performance.now()` across your downstream middleware and handlers, and writes the duration to a response header (default `X-Response-Time`).
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { responseTime } from '@hoajs/response-time'
+
+const app = new Hoa()
+
+app.use(responseTime())
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+## Options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `digits` | `number` | `0` | Number of fractional digits to keep when formatting milliseconds. If non-finite (e.g., `NaN`, `Infinity`), the raw string value `String(deltaMs)` is used. |
+| `header` | `string` | `'X-Response-Time'` | Response header name to set. |
+| `suffix` | `boolean` | `true` | Whether to append the `ms` suffix to the header value. |
+
+## Examples
+
+* Specify fractional digits:
+
+```js
+app.use(responseTime({ digits: 3 }))
+// e.g. X-Response-Time: '12.345ms'
+```
+
+* Disable `ms` suffix:
+
+```js
+app.use(responseTime({ digits: 2, suffix: false }))
+// e.g. X-Response-Time: '12.34'
+```
+
+* Custom header name:
+
+```js
+app.use(responseTime({ header: 'Response-Time' }))
+// e.g. Response-Time: '15ms'
+```
+
+---
+
+---
+url: /middleware/router/router.md
+---
+# @hoajs/router
+
+`@hoajs/router` is a router extension for `Hoa`. It augments a `Hoa` instance with HTTP method helpers, path matching powered by [path-to-regexp](https://github.com/pillarjs/path-to-regexp), and automatic extraction of route parameters into `ctx.req.params`.
+
+```js
+import { Hoa } from 'hoa'
+import { router } from '@hoajs/router'
+
+const app = new Hoa()
+app.extend(router())
+
+app.get('/users/:name', async (ctx, next) => {
+  ctx.res.body = `Hello, ${ctx.req.params.name}!`
+})
+
+export default app
+```
+
+## Adding Routes
+
+Once extended, the `app` instance exposes helpers for all common HTTP verbs:
+
+* `app.get(path, ...handlers)`
+* `app.post(path, ...handlers)`
+* `app.put(path, ...handlers)`
+* `app.patch(path, ...handlers)`
+* `app.delete(path, ...handlers)`
+* `app.head(path, ...handlers)`
+* `app.options(path, ...handlers)`
+* `app.all(path, ...handlers)`
+
+Routes accept one or more async handlers. When multiple handlers are supplied they are composed with Hoa's `compose()` utility and executed in order, receiving the usual `(ctx, next)` signature.
+
+## Route Matching
+
+`@hoajs/router` uses `path-to-regexp` internally:
+
+* Path parameters (e.g. `/users/:name`) are decoded and exposed on `ctx.req.params`.
+* The original pattern is stored on `ctx.req.routePath`.
+* `app.all()` matches every HTTP method.
+* `HEAD` requests fall back to `GET` handlers when no explicit `HEAD` handler is defined.
+
+## Router Options
+
+Configure matching behavior by passing options to `router()`:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `sensitive` | `boolean` | `false` | Treat paths as case-sensitive when matching. |
+| `end` | `boolean` | `true` | Require the entire URL to match the pattern. |
+| `delimiter` | `string` | `'/'` | Segment delimiter used for named parameters. |
+| `trailing` | `boolean` | `true` | Allow trailing delimiters (e.g. `/users/`). |
+
+```js
+app.extend(router())
+// Equivalent to
+app.extend(router({
+  sensitive: false,
+  end: true,
+  delimiter: '/',
+  trailing: true
+}))
+```
+
+---
+
+---
+url: /middleware/secure-headers/secure-headers.md
+---
+# @hoajs/secure-headers
+
+`@hoajs/secure-headers` is a comprehensive security headers middleware for Hoa. It sets various HTTP security headers to help protect your application from common web vulnerabilities.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { secureHeaders } from '@hoajs/secure-headers'
+
+const app = new Hoa()
+
+// Enable all security headers with defaults
+app.use(secureHeaders())
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+Route-scoped security headers (with `@hoajs/router`):
+
+```js
+import { Hoa } from 'hoa'
+import { router } from '@hoajs/router'
+import { secureHeaders } from '@hoajs/secure-headers'
+
+const app = new Hoa()
+app.extend(router())
+
+app.get('/public', async (ctx) => {
+  ctx.res.body = 'Public resource (no security headers)'
+})
+
+app.get('/secure', secureHeaders(), async (ctx) => {
+  ctx.res.body = 'Secure resource with all security headers'
+})
+
+app.get('/custom', secureHeaders({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"]
+    }
+  },
+  strictTransportSecurity: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
+  }
+}), async (ctx) => {
+  ctx.res.body = 'Custom security headers'
+})
+
+export default app
+```
+
+## Options
+
+The `secureHeaders` middleware accepts an options object to configure individual security headers. Each header can be:
+
+* `undefined` or `true` - Use default settings (enabled by default for most headers)
+* `false` - Disable the header
+* An options object - Configure the header with specific options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `contentSecurityPolicy` | `ContentSecurityPolicyOptions \| boolean` | `true` | Sets Content-Security-Policy header. See [Content Security Policy](./content-security-policy.md) for details. |
+| `crossOriginEmbedderPolicy` | `CrossOriginEmbedderPolicyOptions \| boolean` | `false` | Sets Cross-Origin-Embedder-Policy header. See [Cross-Origin Embedder Policy](./cross-origin-embedder-policy.md) for details. |
+| `crossOriginOpenerPolicy` | `CrossOriginOpenerPolicyOptions \| boolean` | `true` | Sets Cross-Origin-Opener-Policy header. See [Cross-Origin Opener Policy](./cross-origin-opener-policy.md) for details. |
+| `crossOriginResourcePolicy` | `CrossOriginResourcePolicyOptions \| boolean` | `true` | Sets Cross-Origin-Resource-Policy header. See [Cross-Origin Resource Policy](./cross-origin-resource-policy.md) for details. |
+| `originAgentCluster` | `boolean` | `true` | Sets Origin-Agent-Cluster header. See [Origin Agent Cluster](./origin-agent-cluster.md) for details. |
+| `referrerPolicy` | `ReferrerPolicyOptions \| boolean` | `true` | Sets Referrer-Policy header. See [Referrer Policy](./referrer-policy.md) for details. |
+| `strictTransportSecurity` | `StrictTransportSecurityOptions \| boolean` | `true` | Sets Strict-Transport-Security header. See [Strict Transport Security](./strict-transport-security.md) for details. |
+| `xContentTypeOptions` | `boolean` | `true` | Sets X-Content-Type-Options header. See [X-Content-Type-Options](./x-content-type-options.md) for details. |
+| `xDnsPrefetchControl` | `XDnsPrefetchControlOptions \| boolean` | `true` | Sets X-DNS-Prefetch-Control header. See [X-DNS-Prefetch-Control](./x-dns-prefetch-control.md) for details. |
+| `xDownloadOptions` | `boolean` | `true` | Sets X-Download-Options header. See [X-Download-Options](./x-download-options.md) for details. |
+| `xFrameOptions` | `XFrameOptionsOptions \| boolean` | `true` | Sets X-Frame-Options header. See [X-Frame-Options](./x-frame-options.md) for details. |
+| `xPermittedCrossDomainPolicies` | `XPermittedCrossDomainPoliciesOptions \| boolean` | `true` | Sets X-Permitted-Cross-Domain-Policies header. |
+| `xPoweredBy` | `boolean` | `true` | Removes X-Powered-By header. |
+| `xXssProtection` | `boolean` | `true` | Sets X-XSS-Protection header. See [X-XSS-Protection](./x-xss-protection.md) for details. |
+| `permissionPolicy` | `PermissionPolicyOptions` | `undefined` | Sets Permissions-Policy header. See [Permission Policy](./permission-policy.md) for details. |
+
+### Legacy Aliases
+
+For compatibility, the following aliases are supported:
+
+* `hsts` - Alias for `strictTransportSecurity`
+* `noSniff` - Alias for `xContentTypeOptions`
+* `dnsPrefetchControl` - Alias for `xDnsPrefetchControl`
+* `ieNoOpen` - Alias for `xDownloadOptions`
+* `frameguard` - Alias for `xFrameOptions`
+* `permittedCrossDomainPolicies` - Alias for `xPermittedCrossDomainPolicies`
+* `hidePoweredBy` - Alias for `xPoweredBy`
+* `xssFilter` - Alias for `xXssProtection`
+
+## Using Individual Middleware
+
+Each security header can be used independently:
+
+```js
+import { Hoa } from 'hoa'
+import { 
+  contentSecurityPolicy,
+  strictTransportSecurity,
+  xFrameOptions 
+} from '@hoajs/secure-headers'
+
+const app = new Hoa()
+
+// Use only specific security headers
+app.use(contentSecurityPolicy())
+app.use(strictTransportSecurity({ maxAge: 31536000 }))
+app.use(xFrameOptions({ action: 'deny' }))
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+Or access them through the main function:
+
+```js
+import { Hoa } from 'hoa'
+import { secureHeaders } from '@hoajs/secure-headers'
+
+const app = new Hoa()
+
+// Access individual middleware through secureHeaders
+app.use(secureHeaders.contentSecurityPolicy())
+app.use(secureHeaders.strictTransportSecurity({ maxAge: 31536000 }))
+app.use(secureHeaders.xFrameOptions({ action: 'deny' }))
+
+export default app
+```
+
+## Examples
+
+### Minimal Security Headers
+
+```js
+app.use(secureHeaders({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: false,
+  crossOriginResourcePolicy: false
+}))
+```
+
+### Strict Security Configuration
+
+```js
+app.use(secureHeaders({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'"],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"]
+    }
+  },
+  strictTransportSecurity: {
+    maxAge: 63072000,
+    includeSubDomains: true,
+    preload: true
+  },
+  xFrameOptions: {
+    action: 'deny'
+  },
+  referrerPolicy: {
+    policy: 'no-referrer'
+  }
+}))
+```
+
+### API Server Configuration
+
+```js
+app.use(secureHeaders({
+  contentSecurityPolicy: false,
+  xDownloadOptions: false,
+  crossOriginResourcePolicy: {
+    policy: 'cross-origin'
+  }
+}))
+```
+
+## Default Headers Set
+
+By default, `secureHeaders()` sets the following headers:
+
+* **Content-Security-Policy**: `default-src 'self'; base-uri 'self'; font-src 'self' https: data:; form-action 'self'; frame-ancestors 'self'; img-src 'self' data:; object-src 'none'; script-src 'self'; script-src-attr 'none'; style-src 'self' https: 'unsafe-inline'; upgrade-insecure-requests`
+* **Cross-Origin-Opener-Policy**: `same-origin`
+* **Cross-Origin-Resource-Policy**: `same-origin`
+* **Origin-Agent-Cluster**: `?1`
+* **Referrer-Policy**: `no-referrer`
+* **Strict-Transport-Security**: `max-age=31536000; includeSubDomains`
+* **X-Content-Type-Options**: `nosniff`
+* **X-DNS-Prefetch-Control**: `off`
+* **X-Download-Options**: `noopen`
+* **X-Frame-Options**: `SAMEORIGIN`
+* **X-Permitted-Cross-Domain-Policies**: `none`
+* **X-XSS-Protection**: `0`
+* Removes **X-Powered-By** header
+
+Note: **Cross-Origin-Embedder-Policy** is disabled by default as it can break functionality if not properly configured.
+
+## Related Headers
+
+when you use `@hoajs/powered-by` middleware
+
+```js
+import { Hoa } from 'hoa'
+import { poweredBy } from '@hoajs/powered-by'
+app.use(poweredBy('MyApp'))
+```
+
+then you should disable x-powered-by header
+
+```js
+app.use(secureHeaders({
+  xPoweredBy: false
+}))
+```
+
+Another way to ensure `@hoajs/powered-by` middleware will set `X-Powered-By` headers correctly is to use `@hoajs/secure-headers` middleware first and then use `@hoajs/powered-by` middleware. Because `@hoajs/secure-headers` middleware default behavior is to remove `X-Powered-By` headers.
+
+```js
+app.use(secureHeaders())
+app.use(poweredBy('MyApp'))
+```
+
+---
+
+---
+url: /middleware/debug/sentry.md
+---
+# @hoajs/sentry
+
+Sentry middleware for Hoa. It integrates Sentry error tracking and monitoring using [toucan-js](https://github.com/robertcepa/toucan-js), designed for Cloudflare Workers and edge runtimes.
+
+Features:
+
+* Automatic exception capture and reporting to Sentry
+* Enriched error context with HTTP metadata (method, URL, status, route, host, referer)
+* Request ID tracking from headers or context state
+* Exposes Sentry client on `ctx.state.sentry` for manual logging
+* Supports Cloudflare Workers execution context
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { sentry } from '@hoajs/sentry'
+
+const app = new Hoa()
+
+// Enable Sentry for all routes
+app.use(sentry())
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+## Options
+
+The middleware accepts all [toucan-js options](https://github.com/robertcepa/toucan-js#options), with the following defaults:
+
+| Option | Type | Description |
+| --- | --- | --- |
+| `dsn` | `string` | Sentry DSN. If omitted, reads from `ctx.env.SENTRY_DSN` or `ctx.env.NEXT_PUBLIC_SENTRY_DSN`. |
+| `request` | `Request` | Automatically set to `ctx.request`. |
+| `context` | `ExecutionContext` | Automatically set to `ctx.executionCtx` (or a mock if unavailable). |
+
+## Behavior Details
+
+### Exception Capture
+
+When an error is thrown in downstream middleware:
+
+1. The middleware captures the exception via `toucan.captureException(err)`
+2. Enriches the error with HTTP metadata tags:
+   * `http.status_code`: HTTP status (from `err.status`, `err.statusCode`, or defaults to 500)
+   * `http.method`: Request method (GET, POST, etc.)
+   * `http.url`: Full path including query string
+   * `http.route`: Route pattern (if `ctx.req.routePath` is set)
+   * `http.host`: Request host
+   * `http.referer`: Referer header (if present)
+   * `request_id`: Request ID from `ctx.state.requestId` or `x-request-id` header (if present)
+3. Rethrows the error to preserve default error handling
+
+### Sentry Client Access
+
+The Toucan instance is exposed on `ctx.state.sentry`, allowing manual logging and tracking:
+
+```js
+app.use(async (ctx) => {
+  // Manual logging
+  ctx.state.sentry.setUser({ id: ctx.state.user?.id })
+  ctx.state.sentry.setTag('feature', 'checkout')
+  ctx.state.sentry.addBreadcrumb({
+    message: 'User initiated checkout',
+    level: 'info'
+  })
+  
+  ctx.res.body = 'OK'
+})
+```
+
+## Examples
+
+### Custom DSN
+
+```js
+app.use(sentry({ dsn: 'https://your-dsn@sentry.io/project-id' }))
+```
+
+### Environment and Release Tracking
+
+```js
+app.use(sentry({
+  environment: 'production',
+  release: 'v1.2.3'
+}))
+```
+
+### Manual Error Capture
+
+```js
+app.use(async (ctx) => {
+  try {
+    await riskyOperation()
+  } catch (err) {
+    // Manually capture with custom context
+    ctx.state.sentry.setContext('operation', {
+      type: 'risky',
+      attempt: 1
+    })
+    ctx.state.sentry.captureException(err)
+    
+    // Handle gracefully
+    ctx.res.body = { error: 'Operation failed' }
+    ctx.res.status = 500
+  }
+})
+```
+
+### Performance Monitoring
+
+```js
+app.use(sentry({
+  tracesSampleRate: 0.1, // Sample 10% of transactions
+  beforeSend: (event) => {
+    // Filter out certain errors
+    if (event.exception?.values?.[0]?.type === 'NotFoundError') {
+      return null
+    }
+    return event
+  }
+}))
+```
+
+### Integration with Request ID Middleware
+
+```js
+import { requestId } from '@hoajs/request-id'
+import { sentry } from '@hoajs/sentry'
+
+app.use(requestId())
+app.use(sentry())
+
+// Request ID is automatically tagged in Sentry errors
+app.use(async (ctx) => {
+  throw new Error('Something went wrong')
+  // Error will include request_id tag from ctx.state.requestId
+})
+```
+
+### User Context Tracking
+
+```js
+app.use(async (ctx) => {
+  if (ctx.state.user) {
+    ctx.state.sentry.setUser({
+      id: ctx.state.user.id,
+      email: ctx.state.user.email,
+      username: ctx.state.user.username
+    })
+  }
+  
+  await next()
+})
+```
+
+### Custom Tags and Breadcrumbs
+
+```js
+app.use(async (ctx) => {
+  // Add custom tags
+  ctx.state.sentry.setTag('tenant_id', ctx.state.tenantId)
+  ctx.state.sentry.setTag('api_version', 'v2')
+  
+  // Add breadcrumbs for debugging
+  ctx.state.sentry.addBreadcrumb({
+    category: 'auth',
+    message: 'User authenticated',
+    level: 'info'
+  })
+  
+  await next()
+})
+```
+
+---
+
+---
+url: /middleware/timeout.md
+---
+# @hoajs/timeout
+
+Provide request timeout for Hoa. If downstream middleware does not finish within the specified duration, respond with 504 Gateway Timeout.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { timeout } from '@hoajs/timeout'
+
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+
+const app = new Hoa()
+// Timeout after 5 seconds
+app.use(timeout(5000))
+
+app.use(async (ctx) => {
+  await delay(6000)
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+## Options
+
+```ts
+function timeout(duration: number): (ctx: HoaContext, next: () => Promise<void>) => Promise<void>
+```
+
+* duration: Timeout duration in milliseconds. Must be a positive, finite number. If the downstream does not complete within this time, a 504 response is returned.
+
+## Examples
+
+```js
+// Minimal positive timeout
+app.use(timeout(1))
+
+// Longer timeout
+app.use(timeout(5000))
+
+// Combined with other middlewares
+app.use(cors())
+app.use(compress())
+app.use(timeout(2000))
+
+// With @hoajs/router
+app.get('/users/:id', timeout(5000), async (ctx) => {
+  await delay(6000)
+  ctx.res.body = `UserId: ${ctx.req.params.id}`
+})
+```
+
+---
+
+---
+url: /middleware/router/tiny-router.md
+---
+# @hoajs/tiny-router
+
+`@hoajs/tiny-router` is a lightweight router extension for `Hoa`. It does not rely on `path-to-regexp`; instead, it uses a minimal in-house compiler to perform path matching and parameter parsing. It augments a `Hoa` instance with HTTP method helpers and automatically decodes route parameters into `ctx.req.params`.
+
+```js
+import { Hoa } from 'hoa'
+import { tinyRouter } from '@hoajs/tiny-router'
+
+const app = new Hoa()
+app.extend(tinyRouter())
+
+app.get('/users/:name', async (ctx) => {
+  ctx.res.body = `Hello, ${ctx.req.params.name}!`
+})
+
+export default app
+```
+
+## Adding Routes
+
+Once extended, the `app` instance exposes helpers for all common HTTP verbs:
+
+* `app.get(path, ...handlers)`
+* `app.post(path, ...handlers)`
+* `app.put(path, ...handlers)`
+* `app.patch(path, ...handlers)`
+* `app.delete(path, ...handlers)`
+* `app.head(path, ...handlers)`
+* `app.options(path, ...handlers)`
+* `app.all(path, ...handlers)`
+
+Routes accept one or more async handlers. When multiple handlers are supplied, they are composed with Hoa's `compose()` utility and executed in order, receiving the usual `(ctx, next)` signature.
+
+Note: `HEAD` requests will fall back to `GET` handlers when no explicit `HEAD` handler is defined.
+
+## Options
+
+Pass options to `tinyRouter()` to control matching behavior:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `sensitive` | `boolean` | `false` | Case sensitivity; when `false`, adds the `i` flag. |
+| `trailing` | `boolean` | `true` | Allow an optional trailing slash (e.g., `/users/`). |
+
+```js
+app.extend(tinyRouter())
+// Equivalent to
+app.extend(tinyRouter({
+  sensitive: false,
+  trailing: true
+}))
+```
+
+## Examples
+
+* Named parameter decoding:
+
+```js
+app.get('/hello/:name', (ctx) => {
+  // /hello/Alice%20Lee -> ctx.req.params.name === 'Alice Lee'
+  ctx.res.body = ctx.req.params.name
+})
+```
+
+* Greedy parameter across segments and trailing slash:
+
+```js
+app.get('/a/:path+', (ctx) => {
+  // /a/x/y/z -> ctx.req.params.path === 'x/y/z'
+  // /a/      (trailing=true) -> ctx.req.params.path === undefined
+})
+```
+
+* Wildcard matching and original pattern recording:
+
+```js
+app.get('/assets/*', (ctx) => {
+  // /assets/css/app.css -> matched
+  // ctx.req.routePath === '/assets/*'
+})
+```
+
+* Case sensitivity and trailing slash control:
+
+```js
+app.extend(tinyRouter({ sensitive: true, trailing: false }))
+app.get('/Users/:id', (ctx) => { /* only matches /Users/123 */ })
+```
+
+## tinyRouter vs router
+
+* Implementation: `router` is based on `path-to-regexp`, while `tinyRouter` uses a minimal built-in compiler (lighter, no extra dependency).
+* Options: `router` supports `sensitive`, `end`, `delimiter`, and `trailing`; `tinyRouter` supports only `sensitive` and `trailing`.
+* Matching capability: Both support common patterns and parameter parsing; `tinyRouter`’s patterns are more streamlined, ideal for small to medium projects or when bundle size matters.
+* API consistency: Both expose the same extension helpers, parameter decoding, and `HEAD` fallback behavior, making switching between them straightforward.
+
+---
+
+---
+url: /middleware/validator/valibot.md
+---
+# @hoajs/valibot
+
+Valibot validator middleware for Hoa.
+
+valibotValidator reads values from `ctx.req` using the keys you define in the schema:
+
+* `{ query: v.object({...}) }` → `ctx.req.query`.
+* `{ headers: v.object({...}) }` → `ctx.req.headers`.
+* `{ params: v.object({...}) }` → `ctx.req.params` (requires `@hoajs/router` to populate `params`).
+* `{ body: v.object({...}) }` → `ctx.req.body` (requires `@hoajs/bodyparser` to populate `body`).
+* URL parts (`href`, `origin`, `protocol`, `host`, `hostname`, `port`, `pathname`, `search`, `hash`, `method`) → corresponding fields on `ctx.req`.
+
+On success, the validated value is written back to `ctx.req[key]`. On failure, it throws `400` with a merged error message (deduplicated and joined by `; ` by default).
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { router } from '@hoajs/router'
+import { v, valibotValidator } from '@hoajs/valibot'
+
+const app = new Hoa()
+app.extend(router())
+
+app.get(
+  '/users/:name',
+  valibotValidator({
+    params: v.object({
+      name: v.string()
+    }),
+    // query: v.object({...}),
+    // headers: v.object({...}),
+    // body: v.object({...}),
+    // ...
+  }),
+  async (ctx) => {
+    const name = ctx.req.params.name
+    ctx.res.body = `Hello, ${name}!`
+  }
+)
+
+export default app
+```
+
+## Examples
+
+* Validate query parameters
+
+```js
+app.get(
+  '/search',
+  valibotValidator({ query: v.object({ key1: v.string(), key2: v.string() }) }),
+  (ctx) => { ctx.res.body = { valid: ctx.req.query } }
+)
+```
+
+* Validate headers (preserve undeclared headers)
+
+```js
+app.use(valibotValidator({
+  headers: v.looseObject({ 'x-foo': v.literal('bar') })
+}))
+// ctx.req.headers will keep extra headers, e.g. x-extra
+```
+
+* Validate URL parts
+
+```js
+app.use(valibotValidator({
+  url: v.instance(URL),
+  href: v.pipe(v.string(), v.url()),
+  origin: v.string(),
+  protocol: v.literal('http:'),
+  host: v.literal('example.com:8080'),
+  hostname: v.literal('example.com'),
+  port: v.literal('8080'),
+  pathname: v.literal('/users'),
+  search: v.literal('?id=1'),
+  hash: v.literal('#frag'),
+  method: v.literal('GET')
+}))
+```
+
+## Abort options
+
+valibotValidator supports two options to control how validation errors are collected:
+
+* `abortEarly` (boolean):
+  * `true` → stop collecting after the first issue (per key) and return a single error.
+  * `false` → collect all issues (per key) and return merged errors.
+* `abortPipeEarly` (boolean):
+  * When using `v.pipe(...)`, `true` → stop pipe at the first failing check.
+  * `false` → collect all failing checks in the pipe.
+
+```js
+// Example: abortEarly
+app.use(valibotValidator({
+  body: v.object({ a: v.number(), b: v.number() })
+}, { abortEarly: true }))
+
+// Example: abortPipeEarly
+const pipeSchema = v.pipe(
+  v.string(),
+  v.check(() => false, 'M1'),
+  v.check(() => false, 'M2')
+)
+app.use(valibotValidator({ body: v.object({ p: pipeSchema }) }, { abortPipeEarly: true }))
+```
+
+## Custom error formatting
+
+By default, error messages are de-duplicated and joined by a semicolon. You can customize them:
+
+```js
+app.use(valibotValidator({
+  query: v.object({ id: v.number() })
+}, {
+  formatError: (issues, ctx, key, value) => `Wrong ${key}, got ${String(value?.id)}`
+}))
+```
+
+or use `ctx.throw`:
+
+```js
+app.use(valibotValidator({
+  query: v.object({ id: v.number() })
+}, {
+  formatError: (issues, ctx, key, value) => ctx.throw(412, `Wrong ${key}, got ${String(value?.id)}`)
+}))
+```
+
+---
+
+---
+url: /middleware/vary.md
+---
+# @hoajs/vary
+
+`@hoajs/vary` adds `ctx.res.vary(field)` to Hoa responses to maintain the HTTP `Vary` header. It tells caches (CDN/browser/proxy) that this response varies based on certain request headers.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { vary } from '@hoajs/vary'
+
+const app = new Hoa()
+app.extend(vary())
+
+app.use(async (ctx) => {
+  // Different output per Origin
+  ctx.res.vary('Origin')
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+## Examples
+
+```js
+// Append without duplication (case-insensitive comparison)
+ctx.res.set('Vary', 'Accept')
+ctx.res.vary('accEPT')
+// -> Vary: Accept
+
+// Preserve casing when appending
+ctx.res.set('Vary', 'AccepT')
+ctx.res.vary(['accEPT', 'ORIGIN'])
+// -> Vary: AccepT, ORIGIN
+
+// Special value *
+ctx.res.vary('*')
+// -> Vary: *
+
+ctx.res.set('Vary', '*')
+ctx.res.vary(['Origin', 'User-Agent'])
+// -> Vary: *
+```
+
+---
+
+---
+url: /middleware/validator/zod.md
+---
+# @hoajs/zod
+
+Zod validator middleware for Hoa.
+
+zodValidator reads values from `ctx.req` using the keys you define in the schema:
+
+* `{ query: z.object({...}) }` → `ctx.req.query`.
+* `{ headers: z.object({...}) }` → `ctx.req.headers`.
+* `{ params: z.object({...}) }` → `ctx.req.params` (requires `@hoajs/router` to populate `params`).
+* `{ body: z.object({...}) }` → `ctx.req.body` (requires `@hoajs/bodyparser` to populate `body`).
+* URL parts (`href`, `origin`, `protocol`, `host`, `hostname`, `port`, `pathname`, `search`, `hash`, `method`) → corresponding fields on `ctx.req`.
+
+On success, the validated value is written back to `ctx.req[key]`. On failure, it throws `400` with a merged error message (deduplicated and joined by `; ` by default).
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { router } from '@hoajs/router'
+import { z, zodValidator } from '@hoajs/zod'
+
+const app = new Hoa()
+app.extend(router())
+
+app.get(
+  '/users/:name',
+  zodValidator({
+    params: z.object({
+      name: z.string()
+    }),
+    // query: z.object({...}),
+    // headers: z.object({...}),
+    // body: z.object({...}),
+    // ...
+  }),
+  async (ctx) => {
+    const name = ctx.req.params.name
+    ctx.res.body = `Hello, ${name}!`
+  }
+)
+
+export default app
+```
+
+## Examples
+
+* Validate query parameters
+
+```js
+app.get(
+  '/search',
+  zodValidator({ query: z.object({ key1: z.string(), key2: z.string() }) }),
+  (ctx) => { ctx.res.body = { valid: ctx.req.query } }
+)
+```
+
+* Validate headers (preserve undeclared headers)
+
+```js
+app.use(zodValidator({
+  headers: z.object({ 'x-foo': z.literal('bar') }).passthrough()
+}))
+// ctx.req.headers will keep extra headers, e.g. x-extra
+```
+
+* Validate URL parts
+
+```js
+app.use(zodValidator({
+  url: z.instanceof(URL),
+  href: z.string().url(),
+  origin: z.string(),
+  protocol: z.literal('http:'),
+  host: z.literal('example.com:8080'),
+  hostname: z.literal('example.com'),
+  port: z.literal('8080'),
+  pathname: z.literal('/users'),
+  search: z.literal('?id=1'),
+  hash: z.literal('#frag'),
+  method: z.literal('GET')
+}))
+```
+
+## Custom error formatting
+
+By default, error messages are de-duplicated and joined by a semicolon. You can customize them:
+
+```js
+app.use(zodValidator({
+  query: z.object({ id: z.number() })
+}, {
+  formatError: (err, ctx, key, value) => `Wrong ${key}, got ${value}`
+}))
+```
+
+or use `ctx.throw`:
+
+```js
+app.use(zodValidator({
+  query: z.object({ id: z.number() })
+}, {
+  formatError: (err, ctx, key, value) => ctx.throw(412, `Wrong ${key}, got ${value}`)
+}))
+```
+
+---
+
+---
+url: /api/hoa.md
+---
+# app
+
+```js
+const app = new Hoa({
+  name: 'MyApp'
+})
+```
+
+## app.extend(fn)
+
+Extend the application with a plugin initializer.
+
+```js
+function hoaView (options) {
+  //...
+  return function hoaViewExtension (app) {
+    app.HoaResponse.prototype.render = function render (templateName, data) {
+      this.type = 'html'
+      this.body = `<p>Hello, ${data}!</p>`
+    }
+  }
+}
+
+app.extend(hoaView())
+
+app.use((ctx) => {
+  ctx.res.render('template.html', 'Hoa') // <p>Hello, Hoa!</p>
+})
+```
+
+## app.use(fn)
+
+Register a middleware. Executed in registration order.
+
+```js
+const calls = [] // [1, 3, 4, 2]
+
+app.use(async (ctx, next) => {
+  calls.push(1)
+  await next()
+  calls.push(2)
+})
+
+app.use(async (ctx, next) => {
+  calls.push(3)
+  await next()
+  calls.push(4)
+})
+
+```
+
+## app.fetch(request, env, executionCtx)
+
+Web Standards fetch handler - main entry point for HTTP requests. Compatible with Cloudflare Workers, Deno, and other Web Standards environments.
+
+```js
+export default app
+
+// or
+
+export default {
+  fetch: app.fetch,
+  scheduled: async (event, env, ctx) => {} // eg: Cloudflare Worker
+}
+```
+
+## app.onerror(err, ctx)
+
+Default error handler for unhandled application errors. Logs errors to console unless they're client errors (4xx) or explicitly exposed.
+
+```js
+app.onerror = (err, ctx) => {
+  console.error(err) // HttpError: Boom
+} 
+
+app.use((ctx) => {
+  ctx.throw(500, 'Boom')
+})
+```
+
+## app.toJSON()
+
+Return JSON representation of the app.
+
+```js
+app.toJSON() // { name: 'Hoa' }
+```
+
+---
+
+---
+url: /middleware/secure-headers/content-security-policy.md
+---
+# Content-Security-Policy
+
+The Content-Security-Policy (CSP) middleware helps prevent cross-site scripting (XSS) attacks and other code injection attacks by specifying which sources of content are allowed to be loaded.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { contentSecurityPolicy } from '@hoajs/secure-headers'
+
+const app = new Hoa()
+
+// Use default CSP directives
+app.use(contentSecurityPolicy())
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+## Options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `useDefaults` | `boolean` | `true` | Whether to use default directives. When `false`, only your custom directives are used. |
+| `directives` | `Record<string, string[] \| null \| dangerouslyDisableDefaultSrc>` | See below | CSP directives to set. Keys are directive names (camelCase or kebab-case), values are arrays of sources. |
+| `reportOnly` | `boolean` | `false` | If `true`, sets Content-Security-Policy-Report-Only header instead of Content-Security-Policy. |
+
+### Default Directives
+
+When `useDefaults: true` (default), the following directives are set:
+
+```js
+{
+  'default-src': ["'self'"],
+  'base-uri': ["'self'"],
+  'font-src': ["'self'", 'https:', 'data:'],
+  'form-action': ["'self'"],
+  'frame-ancestors': ["'self'"],
+  'img-src': ["'self'", 'data:'],
+  'object-src': ["'none'"],
+  'script-src': ["'self'"],
+  'script-src-attr': ["'none'"],
+  'style-src': ["'self'", 'https:', "'unsafe-inline'"],
+  'upgrade-insecure-requests': []
+}
+```
+
+## Directive Values
+
+Directive values must be properly quoted when necessary:
+
+* Keywords like `'self'`, `'none'`, `'unsafe-inline'`, `'unsafe-eval'` must be quoted
+* Nonces like `'nonce-abc123'` must be quoted
+* Hashes like `'sha256-...'` must be quoted
+* URLs and wildcards like `https:`, `*.example.com` should NOT be quoted
+
+## Examples
+
+### Custom Directives
+
+```js
+app.use(contentSecurityPolicy({
+  directives: {
+    defaultSrc: ["'self'"],
+    scriptSrc: ["'self'", 'https://trusted.cdn.com'],
+    styleSrc: ["'self'", "'unsafe-inline'"],
+    imgSrc: ["'self'", 'data:', 'https:'],
+    connectSrc: ["'self'", 'https://api.example.com'],
+    fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+    objectSrc: ["'none'"],
+    mediaSrc: ["'self'"],
+    frameSrc: ["'none'"]
+  }
+}))
+```
+
+### Using Nonces
+
+```js
+app.use(contentSecurityPolicy({
+  directives: {
+    scriptSrc: [
+      "'self'",
+      (ctx) => `'nonce-${ctx.state.nonce}'`
+    ]
+  }
+}))
+
+app.use(async (ctx, next) => {
+  // Generate a nonce for each request
+  ctx.state.nonce = crypto.randomBytes(16).toString('base64')
+  await next()
+})
+```
+
+### Report-Only Mode
+
+```js
+app.use(contentSecurityPolicy({
+  reportOnly: true,
+  directives: {
+    defaultSrc: ["'self'"],
+    reportUri: ['/csp-violation-report']
+  }
+}))
+```
+
+### Disable Default Directives
+
+```js
+app.use(contentSecurityPolicy({
+  useDefaults: false,
+  directives: {
+    defaultSrc: ["'self'"],
+    scriptSrc: ["'self'"]
+  }
+}))
+```
+
+### Disable Specific Default Directive
+
+```js
+app.use(contentSecurityPolicy({
+  directives: {
+    // Override default
+    'upgrade-insecure-requests': null,
+    // Add custom directive
+    scriptSrc: ["'self'", 'https://cdn.example.com']
+  }
+}))
+```
+
+### Dangerously Disable default-src
+
+The `default-src` directive is required by default. To disable it (not recommended):
+
+```js
+import { contentSecurityPolicy } from '@hoajs/secure-headers'
+
+app.use(contentSecurityPolicy({
+  directives: {
+    defaultSrc: contentSecurityPolicy.dangerouslyDisableDefaultSrc,
+    scriptSrc: ["'self'"],
+    styleSrc: ["'self'"]
+  }
+}))
+```
+
+### Strict CSP with Nonces
+
+```js
+app.use(async (ctx, next) => {
+  ctx.state.nonce = crypto.randomBytes(16).toString('base64')
+  await next()
+})
+
+app.use(contentSecurityPolicy({
+  directives: {
+    defaultSrc: ["'self'"],
+    scriptSrc: [
+      "'strict-dynamic'",
+      (ctx) => `'nonce-${ctx.state.nonce}'`
+    ],
+    styleSrc: ["'self'"],
+    objectSrc: ["'none'"],
+    baseUri: ["'self'"]
+  }
+}))
+```
+
+## Common Directives
+
+* **default-src**: Fallback for other directives
+* **script-src**: Valid sources for JavaScript
+* **style-src**: Valid sources for stylesheets
+* **img-src**: Valid sources for images
+* **connect-src**: Valid sources for fetch, XMLHttpRequest, WebSocket
+* **font-src**: Valid sources for fonts
+* **object-src**: Valid sources for `<object>`, `<embed>`, `<applet>`
+* **media-src**: Valid sources for `<audio>` and `<video>`
+* **frame-src**: Valid sources for frames
+* **frame-ancestors**: Valid parents that may embed a page
+* **form-action**: Valid endpoints for form submissions
+* **base-uri**: Valid URLs for the `<base>` element
+* **upgrade-insecure-requests**: Instructs browsers to upgrade HTTP requests to HTTPS
+
+## Getting Default Directives
+
+```js
+import { contentSecurityPolicy } from '@hoajs/secure-headers'
+
+const defaults = contentSecurityPolicy.getDefaultDirectives()
+console.log(defaults)
+```
+
+---
+
+---
+url: /middleware/secure-headers/cross-origin-embedder-policy.md
+---
+# Cross-Origin-Embedder-Policy
+
+The Cross-Origin-Embedder-Policy (COEP) middleware sets the `Cross-Origin-Embedder-Policy` header to control how the document can load cross-origin resources.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { crossOriginEmbedderPolicy } from '@hoajs/secure-headers'
+
+const app = new Hoa()
+
+// Use default policy (require-corp)
+app.use(crossOriginEmbedderPolicy())
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+## Options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `policy` | `'require-corp' \| 'credentialless' \| 'unsafe-none'` | `'require-corp'` | The COEP policy to enforce. |
+
+## Policy Values
+
+| Value | Description |
+| --- | --- |
+| `'require-corp'` | Requires cross-origin resources to explicitly opt-in to being loaded via CORS or CORP headers. |
+| `'credentialless'` | Allows loading cross-origin resources without CORS, but strips credentials from requests. |
+| `'unsafe-none'` | No restrictions on loading cross-origin resources (disables COEP). |
+
+## Examples
+
+### Require CORP (Default)
+
+```js
+// Requires cross-origin resources to have proper CORS/CORP headers
+app.use(crossOriginEmbedderPolicy({
+  policy: 'require-corp'
+}))
+```
+
+### Credentialless
+
+```js
+// Allows cross-origin resources but without credentials
+app.use(crossOriginEmbedderPolicy({
+  policy: 'credentialless'
+}))
+```
+
+### Unsafe None
+
+```js
+// Disables COEP protection
+app.use(crossOriginEmbedderPolicy({
+  policy: 'unsafe-none'
+}))
+```
+
+## Behavior Details
+
+* **Cross-Origin Isolation**: COEP is required (along with COOP) to enable cross-origin isolation, which allows access to powerful features like `SharedArrayBuffer` and high-resolution timers.
+
+* **Resource Loading**: With `require-corp`, all cross-origin resources (images, scripts, etc.) must either:
+  * Be served with a `Cross-Origin-Resource-Policy` header
+  * Be loaded with CORS (and include the `crossorigin` attribute)
+  * Come from the same origin
+
+* **Breaking Changes**: Enabling `require-corp` can break existing functionality if your site loads resources from third-party domains that don't set proper CORS/CORP headers.
+
+* **Credentialless Mode**: The `credentialless` policy is a newer, less strict alternative that allows cross-origin resources but removes credentials (cookies, auth headers) from requests.
+
+## Common Use Cases
+
+### Enable Cross-Origin Isolation
+
+```js
+import { 
+  crossOriginEmbedderPolicy, 
+  crossOriginOpenerPolicy 
+} from '@hoajs/secure-headers'
+
+// Both headers are required for cross-origin isolation
+app.use(crossOriginEmbedderPolicy({ policy: 'require-corp' }))
+app.use(crossOriginOpenerPolicy({ policy: 'same-origin' }))
+```
+
+### Gradual Migration
+
+```js
+// Start with credentialless for easier migration
+app.use(crossOriginEmbedderPolicy({
+  policy: 'credentialless'
+}))
+```
+
+### Disable COEP
+
+```js
+// Explicitly disable if not needed
+app.use(crossOriginEmbedderPolicy({
+  policy: 'unsafe-none'
+}))
+```
+
+## Important Notes
+
+* **Default Disabled**: In the main `secureHeaders()` middleware, COEP is disabled by default because it can break functionality if not properly configured.
+
+* **Testing Required**: Always test thoroughly when enabling COEP, as it can prevent loading of third-party resources.
+
+* **Browser Support**: Check browser compatibility before relying on COEP for security features.
+
+## Related Headers
+
+COEP works together with other cross-origin headers:
+
+```js
+import { 
+  crossOriginEmbedderPolicy,
+  crossOriginOpenerPolicy,
+  crossOriginResourcePolicy
+} from '@hoajs/secure-headers'
+
+app.use(crossOriginEmbedderPolicy({ policy: 'require-corp' }))
+app.use(crossOriginOpenerPolicy({ policy: 'same-origin' }))
+app.use(crossOriginResourcePolicy({ policy: 'same-origin' }))
+```
+
+---
+
+---
+url: /middleware/secure-headers/cross-origin-opener-policy.md
+---
+# Cross-Origin-Opener-Policy
+
+The Cross-Origin-Opener-Policy (COOP) middleware sets the `Cross-Origin-Opener-Policy` header to control how the document can be opened by cross-origin documents.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { crossOriginOpenerPolicy } from '@hoajs/secure-headers'
+
+const app = new Hoa()
+
+// Use default policy (same-origin)
+app.use(crossOriginOpenerPolicy())
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+## Options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `policy` | `'same-origin' \| 'same-origin-allow-popups' \| 'unsafe-none'` | `'same-origin'` | The COOP policy to enforce. |
+
+## Policy Values
+
+| Value | Description |
+| --- | --- |
+| `'same-origin'` | Isolates the browsing context to same-origin documents only. Cross-origin documents cannot access this document. |
+| `'same-origin-allow-popups'` | Allows the document to retain references to popups that don't set COOP or set it to `unsafe-none`. |
+| `'unsafe-none'` | No restrictions on cross-origin access (disables COOP). |
+
+## Examples
+
+### Same Origin (Default)
+
+```js
+// Strict isolation - only same-origin documents can access
+app.use(crossOriginOpenerPolicy({
+  policy: 'same-origin'
+}))
+```
+
+### Same Origin Allow Popups
+
+```js
+// Allows popups to be opened without COOP
+app.use(crossOriginOpenerPolicy({
+  policy: 'same-origin-allow-popups'
+}))
+```
+
+### Unsafe None
+
+```js
+// Disables COOP protection
+app.use(crossOriginOpenerPolicy({
+  policy: 'unsafe-none'
+}))
+```
+
+## Behavior Details
+
+* **Cross-Origin Isolation**: COOP is required (along with COEP) to enable cross-origin isolation, which allows access to powerful features like `SharedArrayBuffer` and high-resolution timers.
+
+* **Window References**: With `same-origin`, cross-origin documents opened via `window.open()` or links with `target="_blank"` will not be able to access the opener window, and vice versa.
+
+* **Popup Handling**: The `same-origin-allow-popups` policy allows your page to open popups that don't have COOP set, while still maintaining isolation from other cross-origin documents.
+
+* **Breaking Changes**: Setting COOP to `same-origin` can break functionality that relies on cross-origin window communication.
+
+## Common Use Cases
+
+### Strict Isolation
+
+```js
+// Maximum security - complete isolation
+app.use(crossOriginOpenerPolicy({
+  policy: 'same-origin'
+}))
+```
+
+### OAuth/Payment Flows
+
+```js
+// Allow popups for OAuth or payment providers
+app.use(crossOriginOpenerPolicy({
+  policy: 'same-origin-allow-popups'
+}))
+```
+
+### Enable Cross-Origin Isolation
+
+```js
+import { 
+  crossOriginOpenerPolicy,
+  crossOriginEmbedderPolicy 
+} from '@hoajs/secure-headers'
+
+// Both headers required for cross-origin isolation
+app.use(crossOriginOpenerPolicy({ policy: 'same-origin' }))
+app.use(crossOriginEmbedderPolicy({ policy: 'require-corp' }))
+```
+
+### Disable COOP
+
+```js
+// Explicitly disable if not needed
+app.use(crossOriginOpenerPolicy({
+  policy: 'unsafe-none'
+}))
+```
+
+## Important Notes
+
+* **Window Communication**: `same-origin` policy breaks `window.opener` and `window.open()` references between cross-origin documents.
+
+* **Third-Party Integrations**: If your application opens third-party windows (OAuth, payment gateways), consider using `same-origin-allow-popups`.
+
+* **Testing Required**: Always test cross-origin interactions when enabling COOP.
+
+## Related Headers
+
+COOP works together with other cross-origin headers:
+
+```js
+import { 
+  crossOriginOpenerPolicy,
+  crossOriginEmbedderPolicy,
+  crossOriginResourcePolicy
+} from '@hoajs/secure-headers'
+
+app.use(crossOriginOpenerPolicy({ policy: 'same-origin' }))
+app.use(crossOriginEmbedderPolicy({ policy: 'require-corp' }))
+app.use(crossOriginResourcePolicy({ policy: 'same-origin' }))
+```
+
+## Checking Cross-Origin Isolation
+
+You can check if cross-origin isolation is enabled in the browser:
+
+```js
+// In browser JavaScript
+if (window.crossOriginIsolated) {
+  console.log('Cross-origin isolation is enabled')
+  // Can now use SharedArrayBuffer, etc.
+}
+```
+
+---
+
+---
+url: /middleware/secure-headers/cross-origin-resource-policy.md
+---
+# Cross-Origin-Resource-Policy
+
+The Cross-Origin-Resource-Policy (CORP) middleware sets the `Cross-Origin-Resource-Policy` header to control which origins can load the resource.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { crossOriginResourcePolicy } from '@hoajs/secure-headers'
+
+const app = new Hoa()
+
+// Use default policy (same-origin)
+app.use(crossOriginResourcePolicy())
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+## Options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `policy` | `'same-origin' \| 'same-site' \| 'cross-origin'` | `'same-origin'` | The CORP policy to enforce. |
+
+## Policy Values
+
+| Value | Description |
+| --- | --- |
+| `'same-origin'` | Only same-origin requests can load the resource. |
+| `'same-site'` | Same-site requests (including subdomains) can load the resource. |
+| `'cross-origin'` | Any origin can load the resource. |
+
+## Examples
+
+### Same Origin (Default)
+
+```js
+// Only same origin can load resources
+app.use(crossOriginResourcePolicy({
+  policy: 'same-origin'
+}))
+```
+
+### Same Site
+
+```js
+// Same site (including subdomains) can load resources
+app.use(crossOriginResourcePolicy({
+  policy: 'same-site'
+}))
+```
+
+### Cross Origin
+
+```js
+// Any origin can load resources
+app.use(crossOriginResourcePolicy({
+  policy: 'cross-origin'
+}))
+```
+
+## Behavior Details
+
+* **Resource Protection**: CORP protects your resources from being loaded by cross-origin pages, helping prevent certain types of attacks like Spectre.
+
+* **Same-Origin**: With `same-origin`, only pages from the exact same origin (same protocol, domain, and port) can load the resource.
+
+* **Same-Site**: With `same-site`, pages from the same site (including subdomains) can load the resource. For example, `api.example.com` and `www.example.com` are same-site.
+
+* **Cross-Origin**: With `cross-origin`, any origin can load the resource. This is useful for public APIs or CDN resources.
+
+## Common Use Cases
+
+### Web Application (Default)
+
+```js
+// Protect application resources
+app.use(crossOriginResourcePolicy({
+  policy: 'same-origin'
+}))
+```
+
+### API with Subdomains
+
+```js
+// Allow subdomains to access API
+app.use(crossOriginResourcePolicy({
+  policy: 'same-site'
+}))
+```
+
+### Public API or CDN
+
+```js
+// Allow any origin to access resources
+app.use(crossOriginResourcePolicy({
+  policy: 'cross-origin'
+}))
+```
+
+### Mixed Configuration
+
+```js
+import { router } from '@hoajs/router'
+import { crossOriginResourcePolicy } from '@hoajs/secure-headers'
+
+const app = new Hoa()
+app.extend(router())
+
+// Protect private resources
+app.get('/private/*', crossOriginResourcePolicy({ policy: 'same-origin' }))
+
+// Allow public resources
+app.get('/public/*', crossOriginResourcePolicy({ policy: 'cross-origin' }))
+```
+
+## Important Notes
+
+* **COEP Compatibility**: When using `Cross-Origin-Embedder-Policy: require-corp`, all cross-origin resources must have a CORP header or be loaded with CORS.
+
+* **Default Behavior**: Without CORP, browsers may allow cross-origin loading of resources, which could be exploited.
+
+* **API Servers**: For public APIs meant to be consumed by any origin, use `cross-origin`.
+
+## Related Headers
+
+CORP works together with other cross-origin headers:
+
+```js
+import { 
+  crossOriginResourcePolicy,
+  crossOriginEmbedderPolicy,
+  crossOriginOpenerPolicy
+} from '@hoajs/secure-headers'
+
+app.use(crossOriginResourcePolicy({ policy: 'same-origin' }))
+app.use(crossOriginEmbedderPolicy({ policy: 'require-corp' }))
+app.use(crossOriginOpenerPolicy({ policy: 'same-origin' }))
+```
+
+## Difference from CORS
+
+* **CORS**: Controls whether a cross-origin request can read the response (opt-in by the server).
+* **CORP**: Controls whether a resource can be loaded at all by cross-origin pages (opt-out by the server).
+
+CORP is simpler and more restrictive than CORS. Use CORP to protect resources from being loaded, and CORS to control access to API responses.
+
+---
+
+---
+url: /api/context.md
+---
+# ctx
+
+## ctx.request
+
+Read‑only property representing the original Web Standard `Request`, you typically don't need to access it directly; prefer using the convenience methods and properties on `ctx.req` to read request information.
+
+```js
+app.use(async (ctx) => {
+  ctx.req.method === ctx.request.method
+  ctx.req.href === ctx.request.url
+  ctx.req.get('user-agent') === ctx.request.headers.get('user-agent')
+})
+```
+
+## ctx.response
+
+Read‑only property that returns a Web Standard `Response` built from the current context. You typically don't need to access it directly—use it when you want to construct and return a native `Response` yourself.
+
+## ctx.env
+
+Read‑only environment bindings provided by the hosting platform. In Cloudflare Workers this corresponds to the `Env` object passed to the handler (KV namespaces, Durable Objects, secrets, R2 buckets, etc.). It may be `undefined` outside such environments.
+
+```js
+app.use(async (ctx) => {
+  // Access a bound KV namespace (Cloudflare Workers)
+  const value = await ctx.env?.KV.get('key')
+
+  // Access a secret
+  const apiKey = ctx.env?.API_KEY
+})
+```
+
+## ctx.executionCtx
+
+Platform execution context for the current request. In Cloudflare Workers this is the `ExecutionContext`, which exposes `waitUntil()` and `passThroughOnException()`. It may be `undefined` outside such environments.
+
+```js
+app.use(async (ctx) => {
+  // Schedule background work to complete after the response
+  ctx.executionCtx?.waitUntil(logRequestAsync(ctx))
+
+  // Optionally allow upstream to handle exceptions
+  ctx.executionCtx?.passThroughOnException()
+})
+```
+
+## ctx.state
+
+Per‑request mutable state object. Starts as an empty plain object and is intended for middleware and handlers to share data.
+
+```js
+// Middleware A: attach data to ctx.state
+app.use(async (ctx, next) => {
+  ctx.state.startTime = Date.now()
+  await next()
+})
+
+// Middleware B: read data from ctx.state
+app.use(async (ctx) => {
+  const ms = Date.now() - ctx.state.startTime
+  ctx.res.body = { ok: true, elapsed: ms }
+})
+```
+
+## ctx.throw(status, \[message], \[options])
+
+Throw an HttpError.
+
+```js
+ctx.throw(400)
+ctx.throw(400, 'Bad Request')
+ctx.throw(400, 'Bad Request', {
+  expose: true,
+  cause: new Error('Another Error'),
+  headers: { 'X-Foo': 'foo' }
+})
+ctx.throw(400, {
+  message: 'Bad Request',
+  expose: true,
+  cause: new Error('Another Error'),
+  headers: { 'X-Foo': 'foo' }
+})
+```
+
+## ctx.assert(value, status, \[message], \[options])
+
+Assert condition or throw an HttpError.
+
+```js
+ctx.assert(false, 400)
+ctx.assert(false, 400, 'Bad Request')
+ctx.assert(false, 400, 'Bad Request', {
+  expose: true,
+  cause: new Error('Another Error'),
+  headers: { 'X-Foo': 'foo' }
+})
+ctx.assert(false, 400, {
+  message: 'Bad Request',
+  expose: true,
+  cause: new Error('Another Error'),
+  headers: { 'X-Foo': 'foo' }
+})
+```
+
+## ctx.toJSON()
+
+Return JSON representation of the context.
+
+```js
+ctx.toJSON() // { app, req, res }
+```
+
+---
+
+---
+url: /api/request.md
+---
+# ctx.req
+
+## ctx.req.url
+
+Parsed `URL` object of the incoming request.
+
+```bash
+curl 'https://example.com/users?id=1'
+```
+
+```js
+app.use((ctx) => {
+  console.log(ctx.req.url)
+  /*
+  URL {
+    href: 'https://example.com/users?id=1',
+    origin: 'https://example.com',
+    protocol: 'https:',
+    username: '',
+    password: '',
+    host: 'example.com',
+    hostname: 'example.com',
+    port: '',
+    pathname: '/users',
+    search: '?id=1',
+    searchParams: URLSearchParams { 'id' => '1' },
+    hash: ''
+  }
+   */
+})
+```
+
+### ctx.req.url=
+
+Overwrite the request URL using a string or `URL` instance.
+
+```js
+app.use((ctx) => {
+  ctx.req.url = 'https://example.com/users?id=2'
+  // or
+  ctx.req.url = new URL('https://example.com/users?id=2')
+})
+```
+
+## ctx.req.href
+
+Full request URL string including protocol, host, path, query, and hash.
+
+```bash
+curl 'https://example.com/users?page=1'
+```
+
+```js
+app.use((ctx) => {
+  console.log(ctx.req.href) // -> "https://example.com/users?page=1"
+})
+```
+
+### ctx.req.href=
+
+Replace the full request URL string.
+
+```bash
+curl 'https://example.com/users?page=1'
+```
+
+```js
+app.use((ctx) => {
+  ctx.req.href = 'https://example.com/users?page=2'
+})
+```
+
+## ctx.req.origin
+
+Origin portion of the URL (scheme + host + port).
+
+```bash
+curl 'https://example.com:8080/dashboard'
+```
+
+```js
+app.use((ctx) => {
+  console.log(ctx.req.origin) // -> "https://example.com:8080"
+})
+```
+
+### ctx.req.origin=
+
+Replace the origin while keeping path, search, and hash components.
+
+```js
+app.use((ctx) => {
+  ctx.req.origin = 'https://www.example.com'
+})
+```
+
+## ctx.req.protocol
+
+URL protocol including the trailing colon.
+
+```bash
+curl 'http://example.com/'
+```
+
+```js
+app.use((ctx) => {
+  console.log(ctx.req.protocol) // -> "http:"
+})
+```
+
+### ctx.req.protocol=
+
+Set the request protocol.
+
+```js
+app.use((ctx) => {
+  ctx.req.protocol = 'https:'
+})
+```
+
+## ctx.req.host
+
+Host with port (if present).
+
+```bash
+curl 'https://example.com:8080/dashboard'
+```
+
+```js
+app.use((ctx) => {
+  console.log(ctx.req.host) // -> "example.com:8080"
+})
+```
+
+### ctx.req.host=
+
+Set the host string (optionally including port).
+
+```js
+app.use((ctx) => {
+  ctx.req.host = 'www.example.com'
+})
+```
+
+## ctx.req.hostname
+
+Hostname without port.
+
+```bash
+curl 'https://example.com:8080/dashboard'
+```
+
+```js
+app.use((ctx) => {
+  console.log(ctx.req.hostname) // -> "example.com"
+})
+```
+
+### ctx.req.hostname=
+
+Set the hostname.
+
+```js
+app.use((ctx) => {
+  ctx.req.hostname = 'www.example.com'
+})
+```
+
+## ctx.req.port
+
+Port string, or empty string for the default port.
+
+```bash
+curl 'https://example.com:8080/dashboard'
+```
+
+```js
+app.use((ctx) => {
+  console.log(ctx.req.port) // -> "8080"
+})
+```
+
+### ctx.req.port=
+
+Set the port string.
+
+```js
+app.use((ctx) => {
+  ctx.req.port = '8080'
+})
+```
+
+## ctx.req.pathname
+
+URL pathname starting with `/`.
+
+```bash
+curl 'https://example.com/dashboard'
+```
+
+```js
+app.use((ctx) => {
+  console.log(ctx.req.pathname) // -> "/dashboard"
+})
+```
+
+### ctx.req.pathname=
+
+Set the pathname.
+
+```js
+app.use((ctx) => {
+  ctx.req.pathname = '/dashboard'
+})
+```
+
+## ctx.req.search
+
+Raw search string including `?`, or empty string when absent.
+
+```bash
+curl 'https://example.com/users?page=1'
+```
+
+```js
+app.use((ctx) => {
+  console.log(ctx.req.search) // -> "?page=1"
+})
+```
+
+### ctx.req.search=
+
+Set the raw search string (leading `?` optional).
+
+```js
+app.use((ctx) => {
+  ctx.req.search = 'page=42'
+})
+```
+
+## ctx.req.hash
+
+Hash fragment including `#`.
+
+```js
+app.use((ctx) => {
+  console.log(ctx.req.hash) // -> ""
+})
+```
+
+### ctx.req.hash=
+
+Set the hash fragment.
+
+```js
+app.use((ctx) => {
+  ctx.req.hash = '#hash'
+})
+```
+
+## ctx.req.method
+
+HTTP method associated with the request.
+
+```bash
+curl --request GET 'https://example.com'
+```
+
+```js
+app.use((ctx) => {
+  console.log(ctx.req.method) // -> "GET"
+})
+```
+
+### ctx.req.method=
+
+Override the request method.
+
+```js
+app.use((ctx) => {
+  ctx.req.method = 'POST'
+})
+```
+
+## ctx.req.query
+
+Parsed query object (duplicate keys become arrays).
+
+```bash
+curl 'https://example.com/search?q=hoa&page=1&page=2'
+```
+
+```js
+app.use((ctx) => {
+  console.log(ctx.req.query) // -> { q: 'hoa', page: ['1',  '2'] }
+})
+```
+
+### ctx.req.query=
+
+Replace query parameters with a plain object.
+
+```js
+app.use((ctx) => {
+  ctx.req.query = { search: 'hoa', page: ['3', '4'] }
+})
+```
+
+## ctx.req.headers
+
+Plain object snapshot of request headers.
+
+```bash
+curl 'https://example.com/' \
+  -H 'X-Foo: foo' \
+  -H 'X-Bar: bar'
+```
+
+```js
+app.use((ctx) => {
+  console.log(ctx.req.headers) // -> { 'x-foo': 'foo', 'x-bar': 'bar' }
+})
+```
+
+### ctx.req.headers=
+
+Replace request headers with a `Headers` object, plain object, or array of entries.
+
+```js
+app.use((ctx) => {
+  ctx.req.headers = {
+    'X-Foo': 'foo',
+    'X-Bar': 'bar'
+  }
+  // or
+  ctx.req.headers = new Headers([
+    ['X-Foo', 'foo'],
+    ['X-Bar', 'bar']
+  ])
+  // or
+  ctx.req.headers = [
+    ['X-Foo', 'foo'],
+    ['X-Bar', 'bar']
+  ]
+})
+```
+
+## ctx.req.body
+
+Underlying `ReadableStream` body.
+
+```js
+app.use((ctx) => {
+  console.log(ctx.req.body) // -> ReadableStream | null
+})
+```
+
+### ctx.req.body=
+
+Replace the underlying request body with any value.
+
+```js
+app.use((ctx) => {
+  ctx.req.body = {
+    name: 'Hoa'
+  }
+  // or
+  const encoder = new TextEncoder()
+  ctx.req.body = new ReadableStream({
+    start (controller) {
+      controller.enqueue(encoder.encode('patched body'))
+      controller.close()
+    }
+  })
+})
+```
+
+## ctx.req.get(field)
+
+Retrieve a request header by name (case-insensitive).
+
+```bash
+curl 'https://example.com/' \
+  -H 'X-Foo: foo' \
+  -H 'Referrer: google.com'
+```
+
+```js
+app.use((ctx) => {
+  console.log(ctx.req.get('x-foo')) // -> "foo"
+  console.log(ctx.req.get('referer')) // -> "google.com"
+  console.log(ctx.req.get('referrer')) // -> "google.com"
+})
+```
+
+## ctx.req.getSetCookie()
+
+Return all `Set-Cookie` header values as an array.
+
+```bash
+curl 'https://example.com/' \
+  -H 'Set-Cookie: session=abc' \
+  -H 'Set-Cookie: theme=dark'
+```
+
+```js
+app.use((ctx) => {
+  console.log(ctx.req.getSetCookie()) // -> ["session=abc","theme=dark"]
+})
+```
+
+## ctx.req.has(field)
+
+Check if a request header is present.
+
+```bash
+curl 'https://example.com/' \
+  -H 'X-Foo: foo'
+```
+
+```js
+app.use((ctx) => {
+  console.log(ctx.req.has('x-foo')) // -> true
+  console.log(ctx.req.has('x-bar')) // -> false
+})
+```
+
+## ctx.req.set(field, value)
+
+Set a single header value.
+
+```js
+app.use((ctx) => {
+  ctx.req.set('X-Bar', 'bar')
+})
+```
+
+### ctx.req.set(headers)
+
+Set multiple headers from a plain object.
+
+```js
+app.use((ctx) => {
+  ctx.req.set({
+    'X-Foo': 'foo',
+    'X-Bar': 'bar'
+  })
+})
+```
+
+## ctx.req.append(field, value)
+
+Append a header value without replacing existing ones.
+
+```js
+app.use((ctx) => {
+  ctx.req.append('X-Foo', 'foo')
+  ctx.req.append('X-Bar', 'bar')
+})
+```
+
+### ctx.req.append(headers)
+
+Append multiple header values from a plain object.
+
+```js
+app.use((ctx) => {
+  ctx.req.append({
+    'X-Foo': 'foo',
+    'X-Bar': 'bar'
+  })
+})
+```
+
+## ctx.req.delete(field)
+
+Delete a request header.
+
+```js
+app.use((ctx) => {
+  ctx.req.delete('cookie')
+})
+```
+
+## ctx.req.ips
+
+Array of IP addresses from the `X-Forwarded-For` header.
+
+```bash
+curl 'https://example.com/' \
+  -H 'X-Forwarded-For: 203.0.113.1, 198.51.100.2'
+```
+
+```js
+app.use((ctx) => {
+  console.log(ctx.req.ips) // -> ["203.0.113.1","198.51.100.2"]
+})
+```
+
+## ctx.req.ip
+
+Best-effort client IP address from standard headers.
+Checks headers in the following order:
+
+* `x-client-ip`
+* `x-forwarded-for`
+* `cf-connecting-ip`
+* `do-connecting-ip`
+* `fastly-client-ip`
+* `true-client-ip`
+* `x-real-ip`
+* `x-cluster-client-ip`
+* `x-forwarded`
+* `forwarded-for`
+* `forwarded`
+* `x-appengine-user-ip`
+* `cf-pseudo-ipv4`
+
+```bash
+curl 'https://example.com/' \
+  -H 'X-Client-IP: 203.0.113.1' \
+  -H 'X-Forwarded-For: 203.0.113.2, 198.51.100.2'
+```
+
+```js
+app.use((ctx) => {
+  console.log(ctx.req.ip) // -> "203.0.113.1"
+})
+```
+
+## ctx.req.length
+
+Content length in bytes, or `null` if unavailable.
+
+```bash
+curl --request POST 'https://example.com/' \
+  -H 'Content-Type: text/plain; charset=utf-8' \
+  --data 'Hello, Hoa!'
+```
+
+```js
+app.use((ctx) => {
+  console.log(ctx.req.length) // -> 11
+})
+```
+
+## ctx.req.type
+
+Content type without parameters (e.g., `application/json`).
+
+```bash
+curl 'https://example.com/' \
+  -H 'Content-Type: application/json; charset=utf-8'
+```
+
+```js
+app.use((ctx) => {
+  console.log(ctx.req.type) // -> "application/json"
+})
+```
+
+## ctx.req.blob()
+
+Read the request body as a `Blob`.
+
+```bash
+curl --request POST 'https://example.com/' \
+  -H 'Content-Type: text/plain; charset=utf-8' \
+  --data 'Hello, Hoa!'
+```
+
+```js
+app.use(async (ctx) => {
+  const blob = await ctx.req.blob()
+  console.log(await blob.text()) // -> "Hello, Hoa!"
+})
+```
+
+> **Note:** Body reader helpers such as `ctx.req.blob()`, `ctx.req.arrayBuffer()`, `ctx.req.text()`, `ctx.req.json()`, and `ctx.req.formData()` can each be invoked only once per request because they consume the underlying stream.
+
+## ctx.req.arrayBuffer()
+
+Read the request body as an `ArrayBuffer`.
+
+```bash
+curl --request POST 'https://example.com/' \
+  -H 'Content-Type: text/plain; charset=utf-8' \
+  --data 'Hello, Hoa!'
+```
+
+```js
+app.use(async (ctx) => {
+  const buffer = await ctx.req.arrayBuffer()
+  console.log(new TextDecoder().decode(buffer)) // -> "Hello, Hoa!"
+})
+```
+
+## ctx.req.text()
+
+Read the request body as text.
+
+```bash
+curl --request POST 'https://example.com/' \
+  -H 'Content-Type: text/plain; charset=utf-8' \
+  --data 'Hello, Hoa!'
+```
+
+```js
+app.use(async (ctx) => {
+  const text = await ctx.req.text()
+  console.log(text) // -> "Hello, Hoa!"
+})
+```
+
+## ctx.req.json()
+
+Read the request body as parsed JSON.
+
+```bash
+curl --request POST 'https://example.com/' \
+  -H 'Content-Type: application/json; charset=utf-8' \
+  --data '{"name": "Hoa"}'
+```
+
+```js
+app.use(async (ctx) => {
+  const body = await ctx.req.json()
+  console.log(body) // -> { name: 'Hoa' }
+})
+```
+
+## ctx.req.formData()
+
+Read the request body as `FormData`.
+
+```bash
+curl --request POST 'https://example.com/' \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  --data 'name=Hoa'
+```
+
+```js
+app.use(async (ctx) => {
+  const form = await ctx.req.formData()
+  console.log(form.get('name')) // -> "Hoa"
+})
+```
+
+## ctx.req.toJSON()
+
+Return JSON representation of the request.
+
+```js
+app.use((ctx) => {
+  console.log(ctx.req.toJSON()) // -> { method, url, headers }
+})
+```
+
+---
+
+---
+url: /api/response.md
+---
+# ctx.res
+
+## ctx.res.headers
+
+Plain object snapshot of response headers (header names normalized to lowercase).
+
+```js
+app.use((ctx) => {
+  console.log(ctx.res.headers) // -> { 'content-type': 'application/json' }
+})
+```
+
+### ctx.res.headers=
+
+Replace response headers with a `Headers` instance, plain object, or array of entries.
+
+```js
+app.use((ctx) => {
+  ctx.res.headers = {
+    'content-type': 'application/json',
+    'cache-control': 'no-cache'
+  }
+  // or
+  ctx.res.headers = new Headers({
+    'content-type': 'application/json',
+    'cache-control': 'no-cache'
+  })
+  // or
+  ctx.res.headers = [
+    ['content-type', 'application/json',
+    ['cache-control', 'no-cache']
+  ]
+})
+```
+
+## ctx.res.get(field)
+
+Retrieve a response header by name (case-insensitive).
+
+```js
+app.use((ctx) => {
+  console.log(ctx.res.get('content-type')) // -> "application/json"
+})
+```
+
+## ctx.res.getSetCookie()
+
+Return all `Set-Cookie` headers as an array.
+
+```js
+app.use((ctx) => {
+  console.log(ctx.res.getSetCookie()) // -> ["session=abc", "theme=dark"]
+})
+```
+
+## ctx.res.has(field)
+
+Check for the existence of a response header.
+
+```js
+app.use((ctx) => {
+  console.log(ctx.res.has('content-type')) // -> false
+})
+```
+
+## ctx.res.set(field, value)
+
+Set a single response header value.
+
+```js
+app.use((ctx) => {
+  ctx.res.set('X-Foo', 'foo')
+})
+```
+
+### ctx.res.set(headers)
+
+Set multiple headers from a plain object.
+
+```js
+app.use((ctx) => {
+  ctx.res.set({
+    'X-Foo': 'foo',
+    'X-Bar': 'bar'
+  })
+})
+```
+
+## ctx.res.append(field, value)
+
+Append a header value without removing existing ones.
+
+```js
+app.use((ctx) => {
+  ctx.res.append('Set-Cookie', 'one=1; Path=/')
+  ctx.res.append('Set-Cookie', 'two=2; Path=/')
+})
+```
+
+### ctx.res.append(headers)
+
+Append multiple headers using a plain object.
+
+```js
+app.use((ctx) => {
+  ctx.res.append({
+    'X-Foo': 'foo',
+    'X-Bar': 'bar'
+  })
+})
+```
+
+## ctx.res.delete(field)
+
+Delete a response header.
+
+```js
+app.use((ctx) => {
+  ctx.res.delete('content-length')
+})
+```
+
+## ctx.res.status
+
+Current response status code (defaults to `404`). When a body is set, it automatically becomes `200` if not explicitly set.
+
+```js
+app.use((ctx) => {
+  console.log(ctx.res.status) // -> 404 (no body set yet)
+  ctx.res.body = 'Hello'
+  console.log(ctx.res.status) // -> 200 (automatically set when body is assigned)
+})
+```
+
+### ctx.res.status=
+
+Set the response status code.
+
+```js
+app.use((ctx) => {
+  ctx.res.status = 201
+  ctx.res.body = 'Created'
+})
+```
+
+## ctx.res.statusText
+
+Current response status text. Defaults to the standard message for the current status.
+
+```js
+app.use((ctx) => {
+  console.log(ctx.res.statusText) // "OK"
+})
+```
+
+### ctx.res.statusText=
+
+Override the response status text.
+
+```js
+app.use((ctx) => {
+  ctx.res.status = 202
+  ctx.res.statusText = 'Accepted for processing'
+})
+```
+
+## ctx.res.body
+
+Get the current response body.
+
+```js
+app.use(async (ctx, next) => {
+  console.log(ctx.res.body) // -> any
+})
+```
+
+### ctx.res.body=
+
+Set the response body. Supports `string`, `object`, `Blob`, `ArrayBuffer`, `TypedArray`, `ReadableStream`, `FormData`, `URLSearchParams`, or `Response`. Setting `null` or `undefined` clears the body and adjusts headers for empty responses.
+
+```js
+app.use((ctx) => {
+  // string
+  ctx.res.body = 'Hello, Hoa!'
+  // json
+  ctx.res.body = { message: 'Hello, Hoa!' }
+  // Blob
+  ctx.res.body = new Blob(['Hello, Hoa!'])
+  // ArrayBuffer
+  ctx.res.body = new TextEncoder().encode('Hello, Hoa!').buffer
+  // TypedArray
+  ctx.res.body = new TextEncoder().encode('Hello, Hoa!') 
+  // ReadableStream
+  ctx.res.body = new ReadableStream({
+    start (controller) {
+      controller.enqueue(new TextEncoder().encode('Hello, Hoa!'))
+      controller.close()
+    }
+  })
+  // FormData
+  const form = new FormData()
+  form.append('message', 'Hello, Hoa!')
+  ctx.res.body = form
+  // URLSearchParams
+  ctx.res.body = new URLSearchParams({ message: 'Hello, Hoa!' })
+  // Response
+  ctx.res.body = new Response('Hello, Hoa!')
+  // null
+  ctx.res.body = null
+  // undefined
+  ctx.res.body = undefined
+})
+```
+
+## ctx.res.redirect(url)
+
+Perform an HTTP redirect (defaults to status `302` unless already a redirect status).
+
+```js
+app.use((ctx) => {
+  ctx.res.redirect('https://example.com/login')
+})
+```
+
+## ctx.res.back(\[alt])
+
+Redirect to the `Referrer` header when safe; fallback to `alt` or `/`.
+
+```js
+app.use((ctx) => {
+  ctx.res.back()
+  ctx.res.back('/home')
+})
+```
+
+## ctx.res.type
+
+Content-Type without parameters.
+
+```js
+app.use((ctx) => {
+  console.log(ctx.res.type) // -> "application/json"
+})
+```
+
+### ctx.res.type=
+
+Set the response type and update the `Content-Type` header.
+
+```js
+app.use((ctx) => {
+  ctx.res.type = 'json' // Optional
+  ctx.res.body = { ok: true }
+})
+```
+
+## ctx.res.length
+
+Content-Length in bytes. Automatically computed from the body when possible.
+
+```js
+app.use((ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+  console.log(ctx.res.length) // -> 11
+})
+```
+
+### ctx.res.length=
+
+Manually set the response Content-Length header.
+
+```js
+app.use((ctx) => {
+  ctx.res.body = 'Hello'
+  ctx.res.length = new TextEncoder().encode(ctx.res.body).length
+})
+```
+
+## ctx.res.toJSON()
+
+Return JSON representation of the response.
+
+```js
+app.use((ctx) => {
+ console.log(ctx.res.toJSON()) // -> { status: 200, statusText: 'OK', headers: {...} }
+})
+```
+
+---
+
+---
+url: /middleware/secure-headers/origin-agent-cluster.md
+---
+# Origin-Agent-Cluster
+
+The Origin-Agent-Cluster middleware sets the `Origin-Agent-Cluster` header to request that the browser isolate the page in its own agent cluster, improving security and performance.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { originAgentCluster } from '@hoajs/secure-headers'
+
+const app = new Hoa()
+
+// Enable origin agent clustering
+app.use(originAgentCluster())
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+## Options
+
+This middleware takes no options. It always sets the header to `?1`.
+
+## Examples
+
+### Basic Usage
+
+```js
+// Sets: Origin-Agent-Cluster: ?1
+app.use(originAgentCluster())
+```
+
+## Behavior Details
+
+* **Agent Cluster Isolation**: This header requests that the browser place the document in an origin-keyed agent cluster, meaning it won't share an agent cluster with cross-origin pages.
+
+* **Performance**: Origin-keyed agent clusters can improve performance by allowing the browser to better parallelize work across origins.
+
+* **Security**: Provides additional isolation between origins, reducing the risk of side-channel attacks like Spectre.
+
+* **Compatibility**: This is a hint to the browser. Browsers may ignore it or implement it differently.
+
+## What is an Agent Cluster?
+
+An agent cluster is a group of browsing contexts (windows, iframes, workers) that can synchronously access each other. By requesting origin-keyed agent clusters, you're asking the browser to:
+
+* Not share JavaScript execution contexts between different origins
+* Potentially improve parallelization
+* Reduce cross-origin information leakage
+
+## Common Use Cases
+
+### All Applications (Recommended)
+
+```js
+// Enable for better isolation and performance
+app.use(originAgentCluster())
+```
+
+### With Other Security Headers
+
+```js
+import { 
+  originAgentCluster,
+  crossOriginOpenerPolicy,
+  crossOriginEmbedderPolicy 
+} from '@hoajs/secure-headers'
+
+app.use(originAgentCluster())
+app.use(crossOriginOpenerPolicy({ policy: 'same-origin' }))
+app.use(crossOriginEmbedderPolicy({ policy: 'require-corp' }))
+```
+
+## Important Notes
+
+* **No Configuration**: This middleware has no configuration options. It always sets `Origin-Agent-Cluster: ?1`.
+
+* **Browser Hint**: This is a request to the browser, not a guarantee. Browsers may choose to ignore it.
+
+* **No Downsides**: There are generally no downsides to enabling this header, so it's recommended for all applications.
+
+* **Default Enabled**: This header is enabled by default in the main `secureHeaders()` middleware.
+
+---
+
+---
+url: /middleware/secure-headers/permission-policy.md
+---
+# Permission-Policy
+
+The Permission-Policy middleware sets the `Permissions-Policy` header to control which browser features and APIs can be used in the browser.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { permissionPolicy } from '@hoajs/secure-headers'
+
+const app = new Hoa()
+
+// Disable geolocation and microphone
+app.use(permissionPolicy({
+  geolocation: false,
+  microphone: false
+}))
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+## Options
+
+The options object accepts feature names as keys with the following value types:
+
+| Value Type | Description | Example |
+| --- | --- | --- |
+| `boolean` | `true` allows all origins (`*`), `false` denies all origins | `camera: false` |
+| `string[]` | Array of allowed origins. Special values: `'self'`, `'src'`, `'none'`, `'*'` | `geolocation: ['self', 'https://example.com']` |
+
+## Available Features
+
+### Standardized Features
+
+* `accelerometer`, `ambientLightSensor`, `attributionReporting`, `autoplay`, `battery`, `bluetooth`, `camera`, `chUa`, `chUaArch`, `chUaBitness`, `chUaFullVersion`, `chUaFullVersionList`, `chUaMobile`, `chUaModel`, `chUaPlatform`, `chUaPlatformVersion`, `chUaWow64`, `computePressure`, `crossOriginIsolated`, `directSockets`, `displayCapture`, `encryptedMedia`, `executionWhileNotRendered`, `executionWhileOutOfViewport`, `fullscreen`, `geolocation`, `gyroscope`, `hid`, `identityCredentialsGet`, `idleDetection`, `keyboardMap`, `magnetometer`, `microphone`, `midi`, `navigationOverride`, `payment`, `pictureInPicture`, `publickeyCredentialsGet`, `screenWakeLock`, `serial`, `storageAccess`, `syncXhr`, `usb`, `webShare`, `windowManagement`, `xrSpatialTracking`
+
+### Proposed Features
+
+* `clipboardRead`, `clipboardWrite`, `gamepad`, `sharedAutofill`, `speakerSelection`
+
+### Experimental Features
+
+* `allScreensCapture`, `browsingTopics`, `capturedSurfaceControl`, `conversionMeasurement`, `digitalCredentialsGet`, `focusWithoutUserActivation`, `joinAdInterestGroup`, `localFonts`, `runAdAuction`, `smartCard`, `syncScript`, `trustTokenRedemption`, `unload`, `verticalScroll`
+
+## Examples
+
+### Disable Specific Features
+
+```js
+app.use(permissionPolicy({
+  geolocation: false,
+  microphone: false,
+  camera: false,
+  payment: false
+}))
+```
+
+### Allow Features for Self Only
+
+```js
+app.use(permissionPolicy({
+  geolocation: ['self'],
+  camera: ['self'],
+  microphone: ['self']
+}))
+```
+
+### Allow Features for Specific Origins
+
+```js
+app.use(permissionPolicy({
+  geolocation: ['self', 'https://maps.example.com'],
+  camera: ['self', 'https://video.example.com'],
+  payment: ['self', 'https://checkout.example.com']
+}))
+```
+
+### Allow All Origins for Specific Features
+
+```js
+app.use(permissionPolicy({
+  fullscreen: true,
+  pictureInPicture: true
+}))
+```
+
+### Mixed Configuration
+
+```js
+app.use(permissionPolicy({
+  // Allow all origins
+  fullscreen: true,
+  // Allow self only
+  geolocation: ['self'],
+  camera: ['self'],
+  // Allow specific origins
+  payment: ['self', 'https://payment-provider.com'],
+  // Deny all
+  microphone: false,
+  usb: false,
+  bluetooth: false
+}))
+```
+
+### Strict Privacy Configuration
+
+```js
+app.use(permissionPolicy({
+  accelerometer: false,
+  ambientLightSensor: false,
+  battery: false,
+  camera: false,
+  geolocation: false,
+  gyroscope: false,
+  magnetometer: false,
+  microphone: false,
+  payment: false,
+  usb: false
+}))
+```
+
+### Content Site Configuration
+
+```js
+app.use(permissionPolicy({
+  autoplay: ['self'],
+  fullscreen: ['self'],
+  pictureInPicture: ['self'],
+  // Disable unnecessary features
+  camera: false,
+  microphone: false,
+  geolocation: false,
+  payment: false
+}))
+```
+
+## Directive Naming
+
+Directive names can be specified in camelCase or kebab-case:
+
+```js
+// These are equivalent
+app.use(permissionPolicy({
+  pictureInPicture: ['self']
+}))
+
+app.use(permissionPolicy({
+  'picture-in-picture': ['self']
+}))
+```
+
+## Special Values
+
+* **`'self'`**: Allows the feature for the same origin
+* **`'src'`**: Allows the feature for the iframe's src attribute (for iframe allow attribute)
+* **`'none'`**: Denies the feature for all origins (equivalent to `false` or `[]`)
+* **`'*'`**: Allows the feature for all origins (equivalent to `true`)
+* **URLs**: Specific origins like `'https://example.com'`
+
+## Header Format
+
+The middleware generates headers in the format:
+
+```
+Permissions-Policy: feature1=(value1), feature2=(value2)
+```
+
+Examples:
+
+* `geolocation=()` - Deny all
+* `geolocation=(*)` - Allow all
+* `geolocation=(self)` - Allow self only
+* `geolocation=(self "https://example.com")` - Allow self and specific origin
+
+---
+
+---
+url: /middleware/secure-headers/referrer-policy.md
+---
+# Referrer-Policy
+
+The Referrer-Policy middleware sets the `Referrer-Policy` header to control how much referrer information should be included with requests.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { referrerPolicy } from '@hoajs/secure-headers'
+
+const app = new Hoa()
+
+// Use default policy (no-referrer)
+app.use(referrerPolicy())
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+## Options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `policy` | `ReferrerPolicyToken \| ReferrerPolicyToken[]` | `['no-referrer']` | One or more referrer policy tokens. |
+
+## Available Policy Tokens
+
+| Token | Description |
+| --- | --- |
+| `'no-referrer'` | Never send the Referer header. |
+| `'no-referrer-when-downgrade'` | Send full URL when protocol security level stays the same (HTTPS→HTTPS), but don't send to less secure destinations (HTTPS→HTTP). |
+| `'same-origin'` | Send full URL for same-origin requests, no referrer for cross-origin requests. |
+| `'origin'` | Send only the origin (scheme, host, and port) in all cases. |
+| `'strict-origin'` | Send origin when protocol security level stays the same (HTTPS→HTTPS), no referrer to less secure destinations (HTTPS→HTTP). |
+| `'origin-when-cross-origin'` | Send full URL for same-origin requests, only origin for cross-origin requests. |
+| `'strict-origin-when-cross-origin'` | Send full URL for same-origin requests, origin for cross-origin requests when protocol security level stays the same, no referrer to less secure destinations. |
+| `'unsafe-url'` | Always send full URL (not recommended for privacy). |
+| `''` | Empty string (legacy, equivalent to no-referrer-when-downgrade). |
+
+## Examples
+
+### No Referrer (Most Private)
+
+```js
+app.use(referrerPolicy({
+  policy: 'no-referrer'
+}))
+```
+
+### Same Origin Only
+
+```js
+app.use(referrerPolicy({
+  policy: 'same-origin'
+}))
+```
+
+### Strict Origin When Cross-Origin (Recommended)
+
+```js
+app.use(referrerPolicy({
+  policy: 'strict-origin-when-cross-origin'
+}))
+```
+
+### Origin Only
+
+```js
+app.use(referrerPolicy({
+  policy: 'origin'
+}))
+```
+
+### Multiple Policies (Fallback)
+
+You can specify multiple policies for browser compatibility. Browsers will use the first policy they support:
+
+```js
+app.use(referrerPolicy({
+  policy: ['no-referrer', 'strict-origin-when-cross-origin']
+}))
+```
+
+### Unsafe URL (Not Recommended)
+
+```js
+// Always sends full URL including path and query string
+// This can leak sensitive information
+app.use(referrerPolicy({
+  policy: 'unsafe-url'
+}))
+```
+
+## Behavior Details
+
+* **Privacy vs Functionality**: More restrictive policies (like `no-referrer`) provide better privacy but may break analytics or anti-CSRF measures that rely on the Referer header.
+
+* **HTTPS Downgrade Protection**: Policies with `strict-origin` prevent sending referrer information when navigating from HTTPS to HTTP, protecting against information leakage.
+
+* **Cross-Origin Considerations**: Policies like `same-origin` and `origin-when-cross-origin` help balance privacy with functionality for cross-origin requests.
+
+## Recommended Policies
+
+* **High Privacy**: `'no-referrer'` or `'same-origin'`
+* **Balanced**: `'strict-origin-when-cross-origin'` or `'origin-when-cross-origin'`
+* **Analytics-Friendly**: `'no-referrer-when-downgrade'` (browser default)
+
+## Common Use Cases
+
+### Public Website
+
+```js
+app.use(referrerPolicy({
+  policy: 'strict-origin-when-cross-origin'
+}))
+```
+
+### Privacy-Focused Application
+
+```js
+app.use(referrerPolicy({
+  policy: 'no-referrer'
+}))
+```
+
+### Internal Application
+
+```js
+app.use(referrerPolicy({
+  policy: 'same-origin'
+}))
+```
+
+### API Server
+
+```js
+app.use(referrerPolicy({
+  policy: 'no-referrer'
+}))
+```
+
+---
+
+---
+url: /middleware/secure-headers/strict-transport-security.md
+---
+# Strict-Transport-Security
+
+The Strict-Transport-Security (HSTS) middleware sets the `Strict-Transport-Security` header to tell browsers to only access the site over HTTPS.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { strictTransportSecurity } from '@hoajs/secure-headers'
+
+const app = new Hoa()
+
+// Use default HSTS settings (1 year, includeSubDomains)
+app.use(strictTransportSecurity())
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+## Options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `maxAge` | `number` | `31536000` (1 year) | Time in seconds that the browser should remember to only access the site over HTTPS. |
+| `includeSubDomains` | `boolean` | `true` | If `true`, applies the rule to all subdomains. |
+| `preload` | `boolean` | `false` | If `true`, allows the site to be included in browsers' HSTS preload lists. |
+
+## Examples
+
+### Default Configuration
+
+```js
+// Sets: Strict-Transport-Security: max-age=31536000; includeSubDomains
+app.use(strictTransportSecurity())
+```
+
+### Custom Max Age
+
+```js
+// 2 years
+app.use(strictTransportSecurity({
+  maxAge: 63072000
+}))
+```
+
+### Without Subdomains
+
+```js
+app.use(strictTransportSecurity({
+  maxAge: 31536000,
+  includeSubDomains: false
+}))
+```
+
+### With Preload
+
+```js
+app.use(strictTransportSecurity({
+  maxAge: 63072000,
+  includeSubDomains: true,
+  preload: true
+}))
+```
+
+## Behavior Details
+
+* **Max Age**: Specifies how long (in seconds) the browser should remember to only access the site over HTTPS. Common values:
+  * `31536000` - 1 year (default)
+  * `63072000` - 2 years
+  * `15768000` - 6 months
+
+* **Include Subdomains**: When enabled, the HSTS policy applies to all subdomains. Be careful with this option if you have subdomains that don't support HTTPS.
+
+* **Preload**: Allows your site to be included in browsers' HSTS preload lists. Before enabling this:
+  * Set `maxAge` to at least 1 year (31536000 seconds)
+  * Enable `includeSubDomains`
+  * Ensure all subdomains support HTTPS
+  * Submit your domain to the [HSTS preload list](https://hstspreload.org/)
+
+## Legacy Alias
+
+This middleware can also be accessed as `hsts`:
+
+```js
+import { hsts } from '@hoajs/secure-headers'
+
+app.use(hsts({
+  maxAge: 31536000
+}))
+```
+
+---
+
+---
+url: /what-is-hoa.md
+---
+
+[![NPM version](https://img.shields.io/npm/v/hoa)](https://npmjs.org/package/hoa)
+[![Build status](https://img.shields.io/github/actions/workflow/status/hoa-js/hoa/ci.yml?branch=master)](https://github.com/hoa-js/hoa/actions)
+[![Codecov](https://img.shields.io/codecov/c/github/hoa-js/hoa/master)](https://app.codecov.io/gh/hoa-js/hoa/tree/master)
+[![Bundle Size](https://img.shields.io/bundlephobia/minzip/hoa)](https://bundlephobia.com/result?p=hoa)
+[![Dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)](https://github.com/hoa-js/hoa/blob/master/package.json)
+[![License](https://img.shields.io/github/license/hoa-js/hoa)](https://github.com/hoa-js/hoa/blob/master/LICENSE)
+
+Hoa is a minimal Web framework inspired by [Koa](https://github.com/koajs/koa) and [Hono](https://github.com/honojs/hono), built entirely on Web Standards. It runs seamlessly on any modern JavaScript runtime: Cloudflare Workers, Fastly Compute, Deno, Bun, Vercel, AWS Lambda, Lambda@Edge, and Node.js.
+
+## Features
+
+* ⚡ Minimal - Only ~4.4KB (gzipped).
+* 🚫 Zero Dependencies - Built on modern Web Standards with no external dependencies.
+* 🛠️ Highly Extensible - Features a flexible extension and middleware system.
+* 😊 Standards-Based - Designed entirely around modern Web Standard APIs.
+* 🌐 Multi-Runtime - The same code runs on Cloudflare Workers, Deno, Bun, Node.js, and more.
+* ✅ 100% Tested – Backed by a full-coverage automated test suite.
+
+## Installation
+
+```bash
+npm i hoa --save
+```
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+const app = new Hoa()
+
+app.use(async (ctx, next) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+## Documentation
+
+The documentation is available on [hoa-js.com](https://hoa-js.com)
+
+## Contributing
+
+Contributions Welcome! You can contribute in the following ways.
+
+* Create an Issue - Propose a new feature. Report a bug.
+* Pull Request - Fix a bug and typo. Refactor the code.
+* Create third-party middleware.
+* Share your thoughts on the Blog, X, and others.
+* Make your application.
+
+## License
+
+Distributed under the MIT License.
+
+---
+
+---
+url: /middleware/secure-headers/x-content-type-options.md
+---
+# X-Content-Type-Options
+
+The X-Content-Type-Options middleware sets the `X-Content-Type-Options` header to prevent browsers from MIME-sniffing responses away from the declared content-type.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { xContentTypeOptions } from '@hoajs/secure-headers'
+
+const app = new Hoa()
+
+// Prevent MIME-sniffing
+app.use(xContentTypeOptions())
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+## Options
+
+This middleware takes no options. It always sets the header to `nosniff`.
+
+## Examples
+
+### Basic Usage
+
+```js
+// Sets: X-Content-Type-Options: nosniff
+app.use(xContentTypeOptions())
+```
+
+## Behavior Details
+
+* **MIME-Sniffing Prevention**: This header prevents browsers from trying to guess the MIME type of a response, forcing them to respect the `Content-Type` header set by the server.
+
+* **Security**: MIME-sniffing can lead to security vulnerabilities. For example, a browser might interpret a text file as HTML and execute any scripts within it.
+
+* **Best Practice**: Always set this header to `nosniff` for all responses.
+
+## What is MIME-Sniffing?
+
+MIME-sniffing is when browsers try to determine the content type of a resource by examining its content, rather than trusting the `Content-Type` header. This can lead to:
+
+* Security vulnerabilities (e.g., executing scripts in uploaded files)
+* Unexpected behavior
+* Content type confusion attacks
+
+## Common Use Cases
+
+### All Applications (Recommended)
+
+```js
+// Always prevent MIME-sniffing
+app.use(xContentTypeOptions())
+```
+
+### File Upload Applications
+
+```js
+// Especially important for applications that serve user-uploaded content
+app.use(xContentTypeOptions())
+
+app.post('/upload', async (ctx) => {
+  // Handle file upload
+  // The nosniff header prevents browsers from executing uploaded files
+})
+```
+
+## Important Notes
+
+* **No Configuration**: This middleware has no configuration options. It always sets `X-Content-Type-Options: nosniff`.
+
+* **Always Recommended**: There are no legitimate reasons to allow MIME-sniffing, so this header should always be enabled.
+
+* **Content-Type Required**: Make sure your application sets appropriate `Content-Type` headers for all responses.
+
+* **Default Enabled**: This header is enabled by default in the main `secureHeaders()` middleware.
+
+## Legacy Alias
+
+This middleware can also be accessed as `noSniff`:
+
+```js
+import { noSniff } from '@hoajs/secure-headers'
+
+app.use(noSniff())
+```
+
+---
+
+---
+url: /middleware/secure-headers/x-dns-prefetch-control.md
+---
+# X-DNS-Prefetch-Control
+
+The X-DNS-Prefetch-Control middleware sets the `X-DNS-Prefetch-Control` header to control DNS prefetching, which can improve performance but may have privacy implications.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { xDnsPrefetchControl } from '@hoajs/secure-headers'
+
+const app = new Hoa()
+
+// Disable DNS prefetching (default)
+app.use(xDnsPrefetchControl())
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+## Options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `allow` | `boolean` | `false` | If `true`, enables DNS prefetching. If `false`, disables it. |
+
+## Examples
+
+### Disable DNS Prefetching (Default)
+
+```js
+// Sets: X-DNS-Prefetch-Control: off
+app.use(xDnsPrefetchControl())
+
+// Or explicitly
+app.use(xDnsPrefetchControl({ allow: false }))
+```
+
+### Enable DNS Prefetching
+
+```js
+// Sets: X-DNS-Prefetch-Control: on
+app.use(xDnsPrefetchControl({ allow: true }))
+```
+
+## Behavior Details
+
+* **DNS Prefetching**: Browsers can prefetch DNS lookups for links on the page to reduce latency when users click on them.
+
+* **Performance**: Enabling DNS prefetching can improve perceived performance by reducing the time it takes to navigate to linked pages.
+
+* **Privacy**: DNS prefetching can leak information about which links are on a page, even if the user doesn't click them. This can be a privacy concern.
+
+* **Default Off**: By default, this middleware disables DNS prefetching for better privacy.
+
+## What is DNS Prefetching?
+
+DNS prefetching is when browsers proactively perform DNS lookups for links on the page before the user clicks them. This can:
+
+* **Improve performance**: Reduce latency when navigating to linked pages
+* **Privacy concerns**: Leak information about page content to DNS servers
+* **Increase traffic**: Generate additional DNS queries
+
+## Common Use Cases
+
+### Privacy-Focused Applications (Default)
+
+```js
+// Disable DNS prefetching for better privacy
+app.use(xDnsPrefetchControl({ allow: false }))
+```
+
+### Performance-Focused Public Websites
+
+```js
+// Enable DNS prefetching for better performance
+app.use(xDnsPrefetchControl({ allow: true }))
+```
+
+### Conditional Configuration
+
+```js
+const isPublicSite = process.env.SITE_TYPE === 'public'
+
+app.use(xDnsPrefetchControl({ 
+  allow: isPublicSite 
+}))
+```
+
+## Important Notes
+
+* **Privacy vs Performance**: Disabling DNS prefetching improves privacy but may slightly reduce performance.
+
+* **HTTPS**: DNS prefetching is automatically disabled for HTTPS pages in some browsers for security reasons.
+
+* **User Control**: Users can also control DNS prefetching through browser settings.
+
+* **Default Disabled**: This header is set to `off` by default in the main `secureHeaders()` middleware.
+
+## Legacy Alias
+
+This middleware can also be accessed as `dnsPrefetchControl`:
+
+```js
+import { dnsPrefetchControl } from '@hoajs/secure-headers'
+
+app.use(dnsPrefetchControl({ allow: false }))
+```
+
+## Manual Control in HTML
+
+You can also control DNS prefetching per-link in HTML:
+
+```html
+<!-- Force DNS prefetch for a specific link -->
+<link rel="dns-prefetch" href="https://example.com">
+
+<!-- Disable DNS prefetch for a specific link -->
+<a href="https://example.com" rel="noreferrer">Link</a>
+```
+
+---
+
+---
+url: /middleware/secure-headers/x-download-options.md
+---
+# X-Download-Options
+
+The X-Download-Options middleware sets the `X-Download-Options` header to prevent Internet Explorer from executing downloads in the site's context.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { xDownloadOptions } from '@hoajs/secure-headers'
+
+const app = new Hoa()
+
+// Prevent IE from executing downloads in site context
+app.use(xDownloadOptions())
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+## Options
+
+This middleware takes no options. It always sets the header to `noopen`.
+
+## Examples
+
+### Basic Usage
+
+```js
+// Sets: X-Download-Options: noopen
+app.use(xDownloadOptions())
+```
+
+## Behavior Details
+
+* **Internet Explorer Specific**: This header is specific to Internet Explorer 8+ and prevents it from executing downloaded files in the context of your site.
+
+* **Security**: Without this header, IE might execute downloaded HTML files in your site's security context, potentially allowing attackers to access cookies and other sensitive data.
+
+* **Modern Browsers**: Modern browsers don't have this behavior, so this header mainly provides protection for legacy IE users.
+
+## What Does "noopen" Mean?
+
+When IE downloads a file, it can show an "Open" button that executes the file in the site's security context. Setting `X-Download-Options: noopen` prevents this, forcing users to save the file first before opening it.
+
+## Common Use Cases
+
+### All Applications (Recommended)
+
+```js
+// Protect legacy IE users
+app.use(xDownloadOptions())
+```
+
+### File Download Applications
+
+```js
+// Especially important for applications that serve downloadable files
+app.use(xDownloadOptions())
+
+app.get('/download/:file', async (ctx) => {
+  // Serve file for download
+  // The noopen header prevents IE from executing it in site context
+})
+```
+
+## Important Notes
+
+* **No Configuration**: This middleware has no configuration options. It always sets `X-Download-Options: noopen`.
+
+* **Legacy Support**: This header primarily benefits users of Internet Explorer 8 and later. Modern browsers don't need it.
+
+* **No Downsides**: There are no downsides to setting this header, so it's recommended for all applications.
+
+* **Default Enabled**: This header is enabled by default in the main `secureHeaders()` middleware.
+
+## Legacy Alias
+
+This middleware can also be accessed as `ieNoOpen`:
+
+```js
+import { ieNoOpen } from '@hoajs/secure-headers'
+
+app.use(ieNoOpen())
+```
+
+## Related Security Measures
+
+For comprehensive download security, combine with other headers:
+
+```js
+import { 
+  xDownloadOptions,
+  xContentTypeOptions,
+  contentSecurityPolicy 
+} from '@hoajs/secure-headers'
+
+app.use(xDownloadOptions())
+app.use(xContentTypeOptions())
+app.use(contentSecurityPolicy())
+```
+
+---
+
+---
+url: /middleware/secure-headers/x-frame-options.md
+---
+# X-Frame-Options
+
+The X-Frame-Options middleware sets the `X-Frame-Options` header to protect against clickjacking attacks by controlling whether the page can be embedded in frames.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { xFrameOptions } from '@hoajs/secure-headers'
+
+const app = new Hoa()
+
+// Use default (SAMEORIGIN)
+app.use(xFrameOptions())
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+## Options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `action` | `'deny' \| 'sameorigin'` | `'sameorigin'` | Controls frame embedding behavior. |
+
+## Action Values
+
+| Value | Description |
+| --- | --- |
+| `'deny'` | The page cannot be displayed in a frame, regardless of the site attempting to do so. |
+| `'sameorigin'` | The page can only be displayed in a frame on the same origin as the page itself. |
+
+## Examples
+
+### Same Origin (Default)
+
+```js
+// Allows framing by same origin only
+// Sets: X-Frame-Options: SAMEORIGIN
+app.use(xFrameOptions())
+```
+
+### Deny All Framing
+
+```js
+// Completely prevents the page from being framed
+// Sets: X-Frame-Options: DENY
+app.use(xFrameOptions({
+  action: 'deny'
+}))
+```
+
+### Case Insensitive
+
+```js
+// These are all equivalent
+app.use(xFrameOptions({ action: 'deny' }))
+app.use(xFrameOptions({ action: 'DENY' }))
+app.use(xFrameOptions({ action: 'Deny' }))
+```
+
+## Behavior Details
+
+* **Clickjacking Protection**: This header helps prevent clickjacking attacks where an attacker embeds your site in an invisible iframe and tricks users into clicking on it.
+
+* **Browser Support**: Widely supported by all modern browsers. For newer applications, consider using the `frame-ancestors` directive in Content-Security-Policy as well.
+
+* **Same Origin**: When set to `SAMEORIGIN`, pages can be framed by other pages on the same domain, which is useful for legitimate use cases like admin panels or dashboards.
+
+* **Deny**: When set to `DENY`, the page cannot be framed at all, providing maximum protection but preventing legitimate iframe usage.
+
+## Common Use Cases
+
+### Public Website (Allow Same Origin)
+
+```js
+app.use(xFrameOptions({
+  action: 'sameorigin'
+}))
+```
+
+### Login/Payment Pages (Deny All)
+
+```js
+app.use(xFrameOptions({
+  action: 'deny'
+}))
+```
+
+### Admin Panel (Same Origin)
+
+```js
+app.use(xFrameOptions({
+  action: 'sameorigin'
+}))
+```
+
+## Modern Alternative
+
+For modern browsers, consider using Content-Security-Policy's `frame-ancestors` directive instead or in addition to X-Frame-Options:
+
+```js
+import { contentSecurityPolicy, xFrameOptions } from '@hoajs/secure-headers'
+
+// Use both for maximum compatibility
+app.use(xFrameOptions({ action: 'deny' }))
+app.use(contentSecurityPolicy({
+  directives: {
+    frameAncestors: ["'none'"]
+  }
+}))
+```
+
+## Legacy Alias
+
+This middleware can also be accessed as `frameguard`:
+
+```js
+import { frameguard } from '@hoajs/secure-headers'
+
+app.use(frameguard({
+  action: 'deny'
+}))
+```
+
+---
+
+---
+url: /middleware/secure-headers/x-permitted-cross-domain-policies.md
+---
+# X-Permitted-Cross-Domain-Policies
+
+The X-Permitted-Cross-Domain-Policies middleware sets the `X-Permitted-Cross-Domain-Policies` header to control how Adobe Flash and PDF documents can access data across domains.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { xPermittedCrossDomainPolicies } from '@hoajs/secure-headers'
+
+const app = new Hoa()
+
+// Disable cross-domain policies (default)
+app.use(xPermittedCrossDomainPolicies())
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+## Options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `permittedPolicies` | `'none' \| 'master-only' \| 'by-content-type' \| 'all'` | `'none'` | Controls which cross-domain policy files are allowed. |
+
+## Policy Values
+
+| Value | Description |
+| --- | --- |
+| `'none'` | No policy files are allowed anywhere on the target server, including the master policy file. |
+| `'master-only'` | Only the master policy file (`/crossdomain.xml`) is allowed. |
+| `'by-content-type'` | Only policy files served with `Content-Type: text/x-cross-domain-policy` are allowed. |
+| `'all'` | All policy files on the target server are allowed. |
+
+## Examples
+
+### None (Default - Most Secure)
+
+```js
+// Sets: X-Permitted-Cross-Domain-Policies: none
+app.use(xPermittedCrossDomainPolicies())
+
+// Or explicitly
+app.use(xPermittedCrossDomainPolicies({ 
+  permittedPolicies: 'none' 
+}))
+```
+
+### Master Only
+
+```js
+// Allow only the master policy file
+app.use(xPermittedCrossDomainPolicies({ 
+  permittedPolicies: 'master-only' 
+}))
+```
+
+### By Content Type
+
+```js
+// Allow policy files with correct Content-Type
+app.use(xPermittedCrossDomainPolicies({ 
+  permittedPolicies: 'by-content-type' 
+}))
+```
+
+### All (Least Secure)
+
+```js
+// Allow all policy files
+app.use(xPermittedCrossDomainPolicies({ 
+  permittedPolicies: 'all' 
+}))
+```
+
+## Behavior Details
+
+* **Adobe Flash/PDF**: This header controls how Adobe Flash Player and Adobe Acrobat/Reader access data across domains using policy files.
+
+* **Legacy Technology**: Flash is deprecated and no longer supported by modern browsers. This header is mainly for legacy support.
+
+* **Default None**: By default, this middleware sets the policy to `none`, which is the most secure option.
+
+* **Policy Files**: Cross-domain policy files (`crossdomain.xml`) were used by Flash to determine which domains could access resources.
+
+## What are Cross-Domain Policy Files?
+
+Cross-domain policy files (`crossdomain.xml`) were XML files that Flash and PDF documents used to determine cross-domain access permissions. For example:
+
+```xml
+<?xml version="1.0"?>
+<cross-domain-policy>
+  <allow-access-from domain="*.example.com" />
+</cross-domain-policy>
+```
+
+## Common Use Cases
+
+### Modern Applications (Recommended)
+
+```js
+// Disable all cross-domain policies (Flash is deprecated)
+app.use(xPermittedCrossDomainPolicies({ 
+  permittedPolicies: 'none' 
+}))
+```
+
+### Legacy Flash Applications
+
+```js
+// If you still need to support Flash
+app.use(xPermittedCrossDomainPolicies({ 
+  permittedPolicies: 'master-only' 
+}))
+```
+
+### Conditional Configuration
+
+```js
+const hasLegacyFlash = process.env.LEGACY_FLASH === 'true'
+
+app.use(xPermittedCrossDomainPolicies({ 
+  permittedPolicies: hasLegacyFlash ? 'master-only' : 'none' 
+}))
+```
+
+## Important Notes
+
+* **Flash is Deprecated**: Adobe Flash Player reached end-of-life on December 31, 2020. Modern browsers no longer support it.
+
+* **Default None**: Setting this to `none` is the most secure option and recommended for all modern applications.
+
+* **No Downsides**: There are no downsides to setting this to `none` unless you specifically need to support legacy Flash content.
+
+* **Default Enabled**: This header is set to `none` by default in the main `secureHeaders()` middleware.
+
+## Legacy Alias
+
+This middleware can also be accessed as `permittedCrossDomainPolicies`:
+
+```js
+import { permittedCrossDomainPolicies } from '@hoajs/secure-headers'
+
+app.use(permittedCrossDomainPolicies({ 
+  permittedPolicies: 'none' 
+}))
+```
+
+## Historical Context
+
+This header was important when Adobe Flash was widely used. Flash applications needed to load data from different domains, and the `crossdomain.xml` file controlled these permissions. With Flash deprecated, this header is now mainly set for defense-in-depth and to explicitly deny any legacy Flash content from accessing cross-domain resources.
+
+## Related Security Measures
+
+For comprehensive cross-origin security, combine with other headers:
+
+```js
+import { 
+  xPermittedCrossDomainPolicies,
+  crossOriginResourcePolicy,
+  contentSecurityPolicy 
+} from '@hoajs/secure-headers'
+
+app.use(xPermittedCrossDomainPolicies({ permittedPolicies: 'none' }))
+app.use(crossOriginResourcePolicy({ policy: 'same-origin' }))
+app.use(contentSecurityPolicy())
+```
+
+---
+
+---
+url: /middleware/secure-headers/x-xss-protection.md
+---
+# X-XSS-Protection
+
+The X-XSS-Protection middleware sets the `X-XSS-Protection` header to control the browser's XSS filter. Modern best practice is to disable it.
+
+## Quick Start
+
+```js
+import { Hoa } from 'hoa'
+import { xXssProtection } from '@hoajs/secure-headers'
+
+const app = new Hoa()
+
+// Disable XSS filter (recommended)
+app.use(xXssProtection())
+
+app.use(async (ctx) => {
+  ctx.res.body = 'Hello, Hoa!'
+})
+
+export default app
+```
+
+## Options
+
+This middleware takes no options. It always sets the header to `0` (disabled).
+
+## Examples
+
+### Basic Usage
+
+```js
+// Sets: X-XSS-Protection: 0
+app.use(xXssProtection())
+```
+
+## Behavior Details
+
+* **Disabled by Default**: This middleware sets the header to `0`, which disables the browser's XSS filter.
+
+* **Why Disable?**: The XSS filter has been found to introduce security vulnerabilities and can be exploited by attackers. Modern browsers like Chrome have removed it entirely.
+
+* **Better Alternative**: Use Content-Security-Policy instead, which provides much better XSS protection without the vulnerabilities of the XSS filter.
+
+* **Legacy Browsers**: Older browsers (IE, old Edge, old Safari) still have XSS filters, so this header tells them to disable it.
+
+## Why Set to 0?
+
+Historically, `X-XSS-Protection: 1` enabled the browser's XSS filter. However:
+
+* The filter can be bypassed
+* It can introduce new vulnerabilities
+* It can break legitimate functionality
+* Modern browsers have removed it
+* Content-Security-Policy is a better solution
+
+Setting it to `0` explicitly disables the filter to prevent potential issues.
+
+## Common Use Cases
+
+### All Applications (Recommended)
+
+```js
+// Disable the XSS filter
+app.use(xXssProtection())
+```
+
+### With Content-Security-Policy
+
+```js
+import { xXssProtection, contentSecurityPolicy } from '@hoajs/secure-headers'
+
+// Disable XSS filter and use CSP instead
+app.use(xXssProtection())
+app.use(contentSecurityPolicy({
+  directives: {
+    defaultSrc: ["'self'"],
+    scriptSrc: ["'self'"]
+  }
+}))
+```
+
+## Important Notes
+
+* **No Configuration**: This middleware has no configuration options. It always sets `X-XSS-Protection: 0`.
+
+* **Modern Best Practice**: Disabling the XSS filter is the modern best practice. Use Content-Security-Policy for XSS protection instead.
+
+* **Browser Support**:
+  * Chrome: Removed XSS filter in Chrome 78
+  * Firefox: Never had an XSS filter
+  * Safari: Still has XSS filter (as of 2024)
+  * Edge: Removed XSS filter (Chromium-based)
+
+* **Default Enabled**: This header is set to `0` by default in the main `secureHeaders()` middleware.
+
+## Legacy Alias
+
+This middleware can also be accessed as `xssFilter`:
+
+```js
+import { xssFilter } from '@hoajs/secure-headers'
+
+app.use(xssFilter())
+```
+
+## Better XSS Protection
+
+Instead of relying on the browser's XSS filter, use Content-Security-Policy:
+
+```js
+import { contentSecurityPolicy } from '@hoajs/secure-headers'
+
+app.use(contentSecurityPolicy({
+  directives: {
+    defaultSrc: ["'self'"],
+    scriptSrc: ["'self'"],
+    objectSrc: ["'none'"],
+    baseUri: ["'self'"]
+  }
+}))
+```
+
+## Historical Context
+
+The `X-XSS-Protection` header had these values:
+
+* `0`: Disable XSS filter (recommended)
+* `1`: Enable XSS filter (not recommended)
+* `1; mode=block`: Enable and block page (not recommended)
+
+This middleware always uses `0` because the XSS filter has been deprecated and removed from modern browsers.
