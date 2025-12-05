@@ -1,3 +1,5 @@
+# ctx.res
+
 ## ctx.res.headers
 
 Plain object snapshot of response headers (header names normalized to lowercase).

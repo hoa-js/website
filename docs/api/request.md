@@ -1,3 +1,5 @@
+# ctx.req
+
 ## ctx.req.url
 
 Parsed `URL` object of the incoming request.

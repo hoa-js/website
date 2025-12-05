@@ -1,3 +1,5 @@
+# ctx
+
 ## ctx.request
 
 Read‑only property representing the original Web Standard `Request`, you typically don't need to access it directly; prefer using the convenience methods and properties on `ctx.req` to read request information.

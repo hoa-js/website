@@ -16,6 +16,7 @@
     "url": "git+https://github.com/hoa-js/website.git"
   },
   "devDependencies": {
-    "vitepress": "1.6.4"
+    "vitepress": "1.6.4",
+    "vitepress-plugin-llms": "1.9.3"
   }
 }

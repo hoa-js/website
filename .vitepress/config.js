@@ -1,7 +1,12 @@
 import { defineConfig } from 'vitepress'
+import llmstxt from 'vitepress-plugin-llms'
 
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
+  vite: {
+    plugins: [llmstxt()]
+  },
+
   title: 'Hoa',
   description: 'A minimal web framework built on Web Standards',
   srcDir: './docs',
@@ -62,7 +67,6 @@ export default defineConfig({
           { text: 'Cache', link: '/middleware/cache' },
           { text: 'Combine', link: '/middleware/combine' },
           { text: 'Compress', link: '/middleware/compress' },
-          { text: 'Context Storage', link: '/middleware/context-storage' },
           { text: 'Cookie', link: '/middleware/cookie' },
           { text: 'CORS', link: '/middleware/cors' },
           { text: 'CSRF', link: '/middleware/csrf' },
@@ -145,6 +149,10 @@ export default defineConfig({
                 link: "/middleware/secure-headers/x-frame-options"
               },
               {
+                text: "X-Permitted-Cross-Domain-Policies",
+                link: "/middleware/secure-headers/x-permitted-cross-domain-policies"
+              },
+              {
                 text: "X-Xss-Protection",
                 link: "/middleware/secure-headers/x-xss-protection"
               },
@@ -179,6 +187,13 @@ export default defineConfig({
           { text: 'Image Transformer', link: 'https://github.com/hoa-js/examples/tree/master/image-transformer' },
           { text: 'My IP', link: 'https://github.com/hoa-js/examples/tree/master/myip' },
           { text: 'Temp Note', link: 'https://github.com/hoa-js/examples/tree/master/tempnote' },
+        ]
+      },
+      {
+        text: 'LLM',
+        items: [
+          { text: 'llms.txt', link: '/llms.txt' },
+          { text: 'llms-full.txt', link: '/llms-full.txt' },
         ]
       },
     ],

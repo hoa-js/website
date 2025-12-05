@@ -1,3 +1,7 @@
+---
+title: What is Hoa?
+---
+
 <div align="center">
   <a href="https://hoa-js.com">
     <img src="https://raw.githubusercontent.com/hoa-js/website/master/logo.png" width="400" height="400" alt="Hoa"/>
