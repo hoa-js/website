@@ -30,7 +30,7 @@ app.use((ctx) => {
   })
   // or
   ctx.res.headers = [
-    ['content-type', 'application/json',
+    ['content-type', 'application/json'],
     ['cache-control', 'no-cache']
   ]
 })

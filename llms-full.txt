@@ -559,7 +559,7 @@ Utility functions for composing middlewares, including `some`, `every`, and `exc
 ```js
 import { Hoa } from 'hoa'
 import { every, some } from '@hoajs/combine'
-import { RateLimiter } from '@hoajs/rate-limiter'
+import { RateLimiter } from '@hoajs/cloudflare-rate-limit'
 import { basicAuth } from '@hoajs/basic-auth'
 import { ip } from '@hoajs/ip'
 
@@ -568,10 +568,10 @@ const app = new Hoa()
 app.use(
   some(
     every(
+      // If both conditions are met, RateLimiter will not execute.
       ip({ allowList: ['192.168.0.2'] }),
       basicAuth({ username: 'admin', password: '123456' })
     ),
-    // If both conditions are met, RateLimiter will not execute.
     RateLimiter(...)
   )
 )
@@ -5193,7 +5193,7 @@ app.use((ctx) => {
   })
   // or
   ctx.res.headers = [
-    ['content-type', 'application/json',
+    ['content-type', 'application/json'],
     ['cache-control', 'no-cache']
   ]
 })
