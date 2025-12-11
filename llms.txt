@@ -24,6 +24,7 @@ A minimal web framework built on Web Standards. Support for any JavaScript runti
 - [@hoajs/cache](/middleware/cache.md)
 - [@hoajs/combine](/middleware/combine.md)
 - [@hoajs/compress](/middleware/compress.md)
+- [@hoajs/context-storage](/middleware/context-storage.md)
 - [@hoajs/cookie](/middleware/cookie.md)
 - [@hoajs/cors](/middleware/cors.md)
 - [@hoajs/csrf](/middleware/csrf.md)
