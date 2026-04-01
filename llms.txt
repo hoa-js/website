@@ -29,6 +29,7 @@ A minimal web framework built on Web Standards. Support for any JavaScript runti
 - [@hoajs/cors](/middleware/cors.md)
 - [@hoajs/csrf](/middleware/csrf.md)
 - [@hoajs/etag](/middleware/etag.md)
+- [@hoajs/formidable](/middleware/formidable.md)
 - [@hoajs/favicon](/middleware/favicon.md)
 - [@hoajs/ip](/middleware/ip.md)
 - [@hoajs/json](/middleware/json.md)

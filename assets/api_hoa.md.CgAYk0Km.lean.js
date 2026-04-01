@@ -1,0 +1,1 @@
+import{_ as i,o as a,c as n,ae as h}from"./chunks/framework.B6gjLfeO.js";const g=JSON.parse('{"title":"app","description":"","frontmatter":{},"headers":[],"relativePath":"api/hoa.md","filePath":"api/hoa.md"}'),p={name:"api/hoa.md"};function t(l,s,k,e,E,r){return a(),n("div",null,[...s[0]||(s[0]=[h("",18)])])}const y=i(p,[["render",t]]);export{g as __pageData,y as default};
