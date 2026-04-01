@@ -79,6 +79,7 @@ export default defineConfig({
             ]
           },
           { text: 'Etag', link: '/middleware/etag' },
+          { text: 'Formidable', link: '/middleware/formidable' },
           { text: 'Favicon', link: '/middleware/favicon' },
           { text: 'IP Restriction', link: '/middleware/ip' },
           { text: 'JSON Format', link: '/middleware/json' },
