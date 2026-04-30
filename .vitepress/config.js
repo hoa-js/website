@@ -191,6 +191,7 @@ export default defineConfig({
           { text: 'My IP', link: 'https://github.com/hoa-js/examples/tree/master/myip' },
           { text: 'Temp Board', link: 'https://github.com/hoa-js/examples/tree/master/tempboard' },
           { text: 'Temp Code', link: 'https://github.com/hoa-js/examples/tree/master/tempcode' },
+          { text: 'Temp Email', link: 'https://github.com/hoa-js/examples/tree/master/tempemail' },
           { text: 'Temp File', link: 'https://github.com/hoa-js/examples/tree/master/tempfile' },
           { text: 'Temp Note', link: 'https://github.com/hoa-js/examples/tree/master/tempnote' },
           { text: 'Temp Table', link: 'https://github.com/hoa-js/examples/tree/master/temptable' },
