@@ -190,6 +190,7 @@ export default defineConfig({
           { text: 'Image Transformer', link: 'https://github.com/hoa-js/examples/tree/master/image-transformer' },
           { text: 'My IP', link: 'https://github.com/hoa-js/examples/tree/master/myip' },
           { text: 'Temp Board', link: 'https://github.com/hoa-js/examples/tree/master/tempboard' },
+          { text: 'Temp Chat', link: 'https://github.com/hoa-js/examples/tree/master/tempchat' },
           { text: 'Temp Code', link: 'https://github.com/hoa-js/examples/tree/master/tempcode' },
           { text: 'Temp Email', link: 'https://github.com/hoa-js/examples/tree/master/tempemail' },
           { text: 'Temp File', link: 'https://github.com/hoa-js/examples/tree/master/tempfile' },
