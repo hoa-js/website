@@ -197,7 +197,8 @@ export default defineConfig({
           { text: 'Temp File', link: 'https://github.com/hoa-js/examples/tree/master/tempfile' },
           { text: 'Temp Note', link: 'https://github.com/hoa-js/examples/tree/master/tempnote' },
           { text: 'Temp Table', link: 'https://github.com/hoa-js/examples/tree/master/temptable' },
-          { text: 'Temp Video', link: 'https://github.com/hoa-js/examples/tree/master/tempvideo' }
+          { text: 'Temp Video', link: 'https://github.com/hoa-js/examples/tree/master/tempvideo' },
+          { text: 'Temp Voice', link: 'https://github.com/hoa-js/examples/tree/master/tempvoice' }
         ]
       },
       {
