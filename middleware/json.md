@@ -37,6 +37,10 @@ app.use(async (ctx, next) => {
 
 ## Options
 
+* expose: `boolean`
+  * When `true`, exposes the original error message globally in the fail body. Can be overridden per-error by setting `error.expose` on the thrown error.
+  * Default: `false`.
+
 * status: `number | ((ctx: HoaContext, error?: Error) => number | Promise<number>)`
   * Status schema or a fixed status code. If a function, it is called as `(ctx, error?)` and may be async.
   * Default: for success, uses `ctx.res.status`; for failure, uses `error.status || error.statusCode || 500`.
@@ -47,7 +51,7 @@ app.use(async (ctx, next) => {
 
 * fail: `Record<string, ((ctx: HoaContext, error: Error) => any | Promise<any>) | any>`
   * Keys and resolvers used to compose the error JSON body; values may be literals or async functions.
-  * Default: `{ code: error.status || error.statusCode || 500, message: e.expose ? e.message : statusTextMapping[e.status || e.statusCode || 500] }`.
+  * Default: `{ code: error.status || error.statusCode || 500, message: (error.expose ?? options.expose) ? error.message : statusTextMapping[error.status || error.statusCode || 500] }`.
 
 ## Examples
 
@@ -112,6 +116,42 @@ Response status: 400, body:
 
 ```json
 { "code": 410, "data": "Gone" }
+```
+
+### expose option
+
+`options.expose` controls whether error messages from **plain `Error` objects** (where `error.expose` is not set) are included in the fail body. When `false` (the default), the HTTP status text is used instead.
+
+> **Note:** `ctx.throw()` creates an `HttpError` which auto-sets `error.expose` to `true` for 4xx errors and `false` for 5xx errors. Since `error.expose` is always defined on `HttpError`, `options.expose` does **not** affect those — it only applies to plain `Error` objects where `error.expose` is `undefined`.
+
+```js
+app.use(json({ expose: true }))
+
+app.use(async (ctx) => {
+  if (ctx.req.pathname === '/error') {
+    throw new Error('something went wrong internally')
+  }
+})
+```
+
+* With `expose: true` → `{ "code": 500, "message": "something went wrong internally" }`
+* With `expose: false` (default) → `{ "code": 500, "message": "Internal Server Error" }`
+
+For `HttpError` (from `ctx.throw`), `error.expose` is always set and takes precedence via `error.expose ?? options.expose`:
+
+```js
+app.use(json({ expose: false }))
+
+app.use(async (ctx) => {
+  // 4xx: HttpError auto-sets expose=true → message always shown regardless of options.expose
+  ctx.throw(400, 'Bad request')
+
+  // 5xx: HttpError auto-sets expose=false → message hidden regardless of options.expose
+  ctx.throw(500, 'DB connection failed')
+
+  // Explicit per-error override via options object:
+  ctx.throw(500, { message: 'DB connection failed', expose: true })
+})
 ```
 
 ### Error headers merge
